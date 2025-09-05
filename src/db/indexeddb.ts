@@ -413,11 +413,12 @@ export const settingsDAO = new SettingsDAO();
 export const progressDAO = new ProgressDAO();
 
 export async function getDatabaseSize(): Promise<number> {
-  if (!navigator.storage || !navigator.storage.estimate) {
+  // Guard for non-browser environments (e.g., Node test runner)
+  const nav: any = (typeof navigator !== 'undefined' ? navigator : undefined) as any
+  if (!nav || !nav.storage || !nav.storage.estimate) {
     return 0;
   }
-  
-  const estimate = await navigator.storage.estimate();
+  const estimate = await nav.storage.estimate();
   return estimate.usage || 0;
 }
 

@@ -1,9 +1,11 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { ChessGame, type GameState, type Move, type GameMove } from '@/rules/chess';
 import { autoSaveService } from '@/services/autosave';
 import { resumeService } from '@/services/resume';
 import { generateId } from '@/shared/utils';
+import { useSound } from '@/contexts/SoundContext';
 import type { Game } from '@/db/indexeddb';
+import { perPlyEvaluation } from '@/services/evaluation';
 
 interface GameContextType {
   game: ChessGame | null;
@@ -26,6 +28,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [gameId, setGameId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { playMoveSound, playCaptureSound, playCheckSound } = useSound();
+  const evaluationsRef = useRef<Record<string, number>>({});
 
   const updateGameState = useCallback((chessGame: ChessGame) => {
     const newState = chessGame.getState();
@@ -36,13 +40,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const makeMove = useCallback((move: string | Move): GameMove | null => {
     if (!game || !gameId) return null;
 
+    // Capture state before making the move
+    const beforeFen = game.fen();
     const moveResult = game.move(move);
     if (moveResult) {
       const newState = updateGameState(game);
-      autoSaveService.saveAfterMove(gameId, newState);
+      // Compute quick per-ply evaluation asynchronously (material-only) and persist
+      try {
+        const evalRes = perPlyEvaluation(beforeFen, newState.fen, moveResult.color);
+        const ply = String(newState.history.length);
+        evaluationsRef.current[ply] = evalRes.evalAfter;
+        autoSaveService.saveAfterMove(gameId, newState, { ...evaluationsRef.current });
+      } catch (e) {
+        // Fallback to saving without evaluations on any unexpected error
+        autoSaveService.saveAfterMove(gameId, newState);
+      }
+      
+      // Play appropriate sound based on the move
+      if (newState.inCheck) {
+        playCheckSound();
+      } else if (moveResult.captured) {
+        playCaptureSound();
+      } else {
+        playMoveSound();
+      }
     }
     return moveResult;
-  }, [game, gameId, updateGameState]);
+  }, [game, gameId, updateGameState, playMoveSound, playCaptureSound, playCheckSound]);
 
   const undoMove = useCallback((): GameMove | null => {
     if (!game || !gameId) return null;
@@ -50,7 +74,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const undoResult = game.undo();
     if (undoResult) {
       const newState = updateGameState(game);
-      autoSaveService.saveAfterMove(gameId, newState);
+      // Remove the last stored evaluation if exists and persist
+      const ply = String(newState.history.length + 1);
+      if (evaluationsRef.current[ply] != null) {
+        delete evaluationsRef.current[ply];
+      }
+      autoSaveService.saveAfterMove(gameId, newState, { ...evaluationsRef.current });
     }
     return undoResult;
   }, [game, gameId, updateGameState]);

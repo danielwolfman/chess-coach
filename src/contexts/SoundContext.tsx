@@ -5,6 +5,9 @@ type SoundContextType = {
   setSoundsEnabled: (enabled: boolean) => void
   playSound: (audioPath: string) => void
   playSoundForce: (audioPath: string) => void
+  playMoveSound: () => void
+  playCaptureSound: () => void
+  playCheckSound: () => void
 }
 
 const SoundContext = createContext<SoundContextType | null>(null)
@@ -45,8 +48,20 @@ export function SoundProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const playMoveSound = () => {
+    playSound('/assets/sounds/move.wav')
+  }
+
+  const playCaptureSound = () => {
+    playSound('/assets/sounds/capture.wav')
+  }
+
+  const playCheckSound = () => {
+    playSound('/assets/sounds/check.wav')
+  }
+
   return (
-    <SoundContext.Provider value={{ soundsEnabled, setSoundsEnabled, playSound, playSoundForce }}>
+    <SoundContext.Provider value={{ soundsEnabled, setSoundsEnabled, playSound, playSoundForce, playMoveSound, playCaptureSound, playCheckSound }}>
       {children}
     </SoundContext.Provider>
   )
