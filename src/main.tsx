@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 
 import { SoundProvider } from './contexts/SoundContext'
+import { GameProvider } from './contexts/GameContext'
 import App from './pages/App'
 import Health from './pages/Health'
 import DBDemo from './pages/DBDemo'
@@ -27,7 +28,9 @@ const router = createBrowserRouter([
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <SoundProvider>
-      <RouterProvider router={router} />
+      <GameProvider>
+        <RouterProvider router={router} />
+      </GameProvider>
     </SoundProvider>
   </React.StrictMode>
 )

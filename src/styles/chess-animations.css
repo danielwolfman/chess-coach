@@ -1,0 +1,161 @@
+/* Chess Board Animations */
+
+@keyframes pulse-capture {
+  0% { 
+    transform: scale3d(1, 1, 1);
+    background-color: inherit;
+  }
+  50% { 
+    transform: scale3d(1.05, 1.05, 1);
+    background-color: var(--capture-color);
+    box-shadow: 0 0 20px var(--capture-color);
+  }
+  100% { 
+    transform: scale3d(1, 1, 1);
+    background-color: inherit;
+  }
+}
+
+@keyframes check-glow {
+  0% { 
+    box-shadow: 0 0 0 rgba(255, 87, 34, 0);
+  }
+  50% { 
+    box-shadow: 0 0 20px rgba(255, 87, 34, 0.6);
+  }
+  100% { 
+    box-shadow: 0 0 0 rgba(255, 87, 34, 0);
+  }
+}
+
+@keyframes piece-hover {
+  0% { 
+    transform: scale3d(1, 1, 1);
+  }
+  100% { 
+    transform: scale3d(1.1, 1.1, 1);
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+  }
+}
+
+@keyframes last-move-highlight {
+  0% { 
+    background-color: inherit;
+  }
+  100% { 
+    background-color: var(--last-move-color);
+  }
+}
+
+@keyframes legal-move-indicator {
+  0% { 
+    opacity: 0.3;
+    transform: scale3d(0.8, 0.8, 1);
+  }
+  50% { 
+    opacity: 0.7;
+    transform: scale3d(1.1, 1.1, 1);
+  }
+  100% { 
+    opacity: 0.3;
+    transform: scale3d(0.8, 0.8, 1);
+  }
+}
+
+/* Animation classes */
+.chess-piece-moving {
+  transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  z-index: 10;
+}
+
+.chess-square-capture {
+  animation: pulse-capture 0.6s ease-in-out;
+}
+
+.chess-square-check {
+  animation: check-glow 1s ease-in-out infinite;
+}
+
+.chess-piece-hover:hover {
+  animation: piece-hover 0.15s ease-out forwards;
+}
+
+.chess-square-last-move {
+  animation: last-move-highlight 0.3s ease-out forwards;
+}
+
+.chess-legal-move-dot {
+  animation: legal-move-indicator 2s ease-in-out infinite;
+}
+
+/* Smooth transitions for all interactive elements */
+.chess-square {
+  transition: 
+    background-color 0.2s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.chess-piece {
+  transition: 
+    transform 0.15s ease,
+    filter 0.15s ease;
+}
+
+/* Performance optimizations for 60fps */
+.chess-board {
+  will-change: auto;
+  contain: layout style paint;
+  transform: translateZ(0); /* Force GPU layer */
+}
+
+.chess-animated-piece {
+  will-change: transform, opacity;
+  contain: strict;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  isolation: isolate;
+}
+
+.chess-square {
+  contain: layout style;
+  transform: translateZ(0); /* Force GPU layer for smooth transitions */
+}
+
+.chess-piece {
+  will-change: transform;
+  transform: translateZ(0); /* Force GPU layer */
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .chess-piece-moving {
+    transition-duration: 0.2s;
+  }
+  
+  .chess-square-capture {
+    animation-duration: 0.4s;
+  }
+  
+  .chess-square-check {
+    animation-duration: 0.8s;
+  }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .chess-piece-moving {
+    transition: none;
+  }
+  
+  .chess-square-capture,
+  .chess-square-check,
+  .chess-legal-move-dot {
+    animation: none;
+  }
+  
+  .chess-piece-hover:hover {
+    animation: none;
+    transform: none;
+  }
+}
