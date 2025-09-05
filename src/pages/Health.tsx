@@ -11,7 +11,9 @@ export default function Health() {
     else root.classList.remove('dark')
     try {
       localStorage.setItem('theme', theme)
-    } catch {}
+    } catch {
+      // Ignore localStorage errors
+    }
   }, [theme])
 
   const status = {

@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
-import { env } from '@/shared/env'
+
 import AppLayout from '@/components/AppLayout'
 import { Skeleton } from '@/components/Skeleton'
+import { SoundToggle } from '@/components/SoundToggle'
+import { env } from '@/shared/env'
 
 export default function App() {
   const Topbar = (
@@ -10,10 +12,14 @@ export default function App() {
         <div className="h-7 w-7 rounded-full border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-canvas)' }} />
         <div className="font-semibold tracking-tight">{env.VITE_APP_NAME}</div>
       </div>
-      <nav className="flex items-center gap-4 text-sm">
-        <Link to="/" className="hover:underline">Home</Link>
-        <Link to="/health" className="hover:underline">Health</Link>
-      </nav>
+      <div className="flex items-center gap-4">
+        <nav className="flex items-center gap-4 text-sm">
+          <Link to="/" className="hover:underline">Home</Link>
+          <Link to="/health" className="hover:underline">Health</Link>
+          <Link to="/db-demo" className="hover:underline">DB Demo</Link>
+        </nav>
+        <SoundToggle />
+      </div>
     </div>
   )
 
