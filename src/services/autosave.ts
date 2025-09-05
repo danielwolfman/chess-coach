@@ -1,5 +1,6 @@
 import { gameDAO } from '@/db/indexeddb';
 import type { GameState, GameMove } from '@/rules/chess';
+import type { PlyAnnotation } from '@/types/annotations';
 
 export interface AutoSaveSnapshot {
   gameId: string;
@@ -7,6 +8,7 @@ export interface AutoSaveSnapshot {
   pgn: string;
   lastMove?: GameMove;
   evaluations?: Record<string, number>;
+  annotations?: Record<string, PlyAnnotation>;
   timestamp: number;
 }
 
@@ -33,7 +35,7 @@ class AutoSaveService {
     };
   }
 
-  saveAfterMove(gameId: string, gameState: GameState, evaluations?: Record<string, number>): void {
+  saveAfterMove(gameId: string, gameState: GameState, evaluations?: Record<string, number>, annotations?: Record<string, PlyAnnotation>): void {
     if (!this.isEnabled) return;
 
     const lastMove = gameState.history[gameState.history.length - 1];
@@ -43,6 +45,7 @@ class AutoSaveService {
       pgn: gameState.pgn,
       lastMove,
       evaluations,
+      annotations,
       timestamp: Date.now(),
     };
 
@@ -66,27 +69,37 @@ class AutoSaveService {
       const existingGame = await gameDAO.getById(snapshot.gameId);
       
       if (existingGame) {
+        const meta: Record<string, any> = {
+          ...existingGame.metadata,
+          lastMove: snapshot.lastMove,
+          evaluations: snapshot.evaluations,
+          autoSavedAt: snapshot.timestamp,
+        }
+        if (snapshot.annotations) {
+          meta.annotations = snapshot.annotations
+        }
+
         await gameDAO.update(snapshot.gameId, {
           fen: snapshot.fen,
           pgn: snapshot.pgn,
-          metadata: {
-            ...existingGame.metadata,
-            lastMove: snapshot.lastMove,
-            evaluations: snapshot.evaluations,
-            autoSavedAt: snapshot.timestamp,
-          },
+          metadata: meta,
         });
       } else {
+        const meta: Record<string, any> = {
+          lastMove: snapshot.lastMove,
+          evaluations: snapshot.evaluations,
+          autoSavedAt: snapshot.timestamp,
+        }
+        if (snapshot.annotations) {
+          meta.annotations = snapshot.annotations
+        }
+
         await gameDAO.create({
           id: snapshot.gameId,
           name: `Auto-saved Game ${new Date(snapshot.timestamp).toLocaleString()}`,
           fen: snapshot.fen,
           pgn: snapshot.pgn,
-          metadata: {
-            lastMove: snapshot.lastMove,
-            evaluations: snapshot.evaluations,
-            autoSavedAt: snapshot.timestamp,
-          },
+          metadata: meta,
         });
       }
 

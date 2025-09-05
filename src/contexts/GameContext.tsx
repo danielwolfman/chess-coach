@@ -6,6 +6,8 @@ import { generateId } from '@/shared/utils';
 import { useSound } from '@/contexts/SoundContext';
 import type { Game } from '@/db/indexeddb';
 import { perPlyEvaluation } from '@/services/evaluation';
+import { classifyMistake, type MistakeLabel } from '@/services/mistake';
+import type { PlyAnnotation } from '@/types/annotations';
 
 interface GameContextType {
   game: ChessGame | null;
@@ -30,6 +32,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const { playMoveSound, playCaptureSound, playCheckSound } = useSound();
   const evaluationsRef = useRef<Record<string, number>>({});
+  const annotationsRef = useRef<Record<string, PlyAnnotation>>({});
 
   const updateGameState = useCallback((chessGame: ChessGame) => {
     const newState = chessGame.getState();
@@ -45,14 +48,40 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const moveResult = game.move(move);
     if (moveResult) {
       const newState = updateGameState(game);
-      // Compute quick per-ply evaluation asynchronously (material-only) and persist
+      // Compute quick per-ply evaluation + classification and persist
       try {
         const evalRes = perPlyEvaluation(beforeFen, newState.fen, moveResult.color);
         const ply = String(newState.history.length);
         evaluationsRef.current[ply] = evalRes.evalAfter;
-        autoSaveService.saveAfterMove(gameId, newState, { ...evaluationsRef.current });
+
+        const san = moveResult.san;
+        const uci = `${moveResult.from}${moveResult.to}${moveResult.promotion ?? ''}`;
+        const classification = classifyMistake({
+          evalBefore: evalRes.evalBefore,
+          evalAfter: evalRes.evalAfter,
+        });
+        const annotation: PlyAnnotation = {
+          ply: Number(ply),
+          san,
+          uci,
+          fen: newState.fen,
+          evalBefore: evalRes.evalBefore,
+          evalAfter: evalRes.evalAfter,
+          delta: evalRes.delta,
+          classification: classification.label as MistakeLabel,
+          notes: classification.notes,
+          timestamp: Date.now(),
+        };
+        annotationsRef.current[ply] = annotation;
+
+        autoSaveService.saveAfterMove(
+          gameId,
+          newState,
+          { ...evaluationsRef.current },
+          { ...annotationsRef.current }
+        );
       } catch (e) {
-        // Fallback to saving without evaluations on any unexpected error
+        // Fallback to saving without annotations/evals on any unexpected error
         autoSaveService.saveAfterMove(gameId, newState);
       }
       
@@ -74,12 +103,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const undoResult = game.undo();
     if (undoResult) {
       const newState = updateGameState(game);
-      // Remove the last stored evaluation if exists and persist
+      // Remove the last stored evaluation/annotation if exists and persist
       const ply = String(newState.history.length + 1);
       if (evaluationsRef.current[ply] != null) {
         delete evaluationsRef.current[ply];
       }
-      autoSaveService.saveAfterMove(gameId, newState, { ...evaluationsRef.current });
+      if (annotationsRef.current[ply] != null) {
+        delete annotationsRef.current[ply];
+      }
+      autoSaveService.saveAfterMove(gameId, newState, { ...evaluationsRef.current }, { ...annotationsRef.current });
     }
     return undoResult;
   }, [game, gameId, updateGameState]);
