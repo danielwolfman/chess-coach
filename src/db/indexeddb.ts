@@ -229,6 +229,7 @@ class SettingsDAO {
         updatedAt: now,
       };
       await db.put('settings', updated);
+      dispatchSettingsUpdated(updated)
       return updated;
     } else {
       const defaultSettings: Settings = {
@@ -244,6 +245,7 @@ class SettingsDAO {
         updatedAt: now,
       };
       await db.add('settings', defaultSettings);
+      dispatchSettingsUpdated(defaultSettings)
       return defaultSettings;
     }
   }
@@ -263,6 +265,7 @@ class SettingsDAO {
     };
 
     await db.put('settings', updated);
+    dispatchSettingsUpdated(updated)
     return updated;
   }
 
@@ -429,3 +432,15 @@ export async function clearAllData(): Promise<void> {
 }
 
 export { initDB };
+
+// Fire a DOM CustomEvent when settings change so UI can update live.
+function dispatchSettingsUpdated(settings: Settings): void {
+  try {
+    const w: any = (typeof window !== 'undefined' ? window : undefined)
+    if (w && typeof w.dispatchEvent === 'function' && typeof w.CustomEvent === 'function') {
+      w.dispatchEvent(new w.CustomEvent('settings:updated', { detail: settings }))
+    }
+  } catch {
+    // no-op in non-DOM environments (tests, SSR)
+  }
+}

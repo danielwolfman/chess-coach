@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import AppLayout from '@/components/AppLayout'
 import { Skeleton } from '@/components/Skeleton'
 import { SoundToggle } from '@/components/SoundToggle'
+import { LevelBadge } from '@/components/LevelBadge'
 import { ResumeDialog } from '@/components/ResumeDialog'
 import { Board } from '@/components/Board'
 import { useGame } from '@/contexts/GameContext'
@@ -106,6 +107,7 @@ export default function App() {
           <Link to="/health" className="hover:underline">Health</Link>
           <Link to="/db-demo" className="hover:underline">DB Demo</Link>
         </nav>
+        <LevelBadge />
         <SoundToggle />
       </div>
     </div>
