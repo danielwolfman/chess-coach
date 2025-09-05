@@ -1,0 +1,75 @@
+/* Design Tokens (light + dark) */
+:root {
+  /* Colors */
+  --color-canvas: #ffffff;
+  --color-surface: #f8fafc; /* slate-50 */
+  --color-fg: #0f172a; /* slate-900 */
+  --color-muted: #64748b; /* slate-500 */
+  --color-border: #e5e7eb; /* gray-200 */
+  --color-brand: #4f46e5; /* indigo-600 */
+
+  /* Spacing (4px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radius */
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.07), 0 1px 1px rgba(0, 0, 0, 0.04);
+  --shadow-2: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+
+  /* Motion */
+  --dur-fast: 150ms;
+  --dur-std: 220ms;
+  --dur-slow: 400ms;
+}
+
+.dark {
+  --color-canvas: #0b1220; /* near slate-950 */
+  --color-surface: #111827; /* gray-900 */
+  --color-fg: #e5e7eb; /* gray-200 */
+  --color-muted: #94a3b8; /* slate-400 */
+  --color-border: #334155; /* slate-700 */
+  --color-brand: #818cf8; /* indigo-400 */
+
+  /* Optional dark-tuned shadow (gentler, lifted) */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 1px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 12px 20px -5px rgba(0, 0, 0, 0.45), 0 5px 8px -6px rgba(0, 0, 0, 0.4);
+}
+
+/* Minimal utilities built on tokens */
+.ui-card {
+  background: var(--color-surface);
+  color: var(--color-fg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-4);
+}
+
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-brand);
+  color: white;
+  border-radius: var(--radius-s);
+  padding: calc(var(--space-2) + 2px) var(--space-4);
+  transition: background-color var(--dur-fast), transform var(--dur-fast);
+}
+.ui-btn:hover { transform: translateY(-1px); }
+.ui-btn:active { transform: translateY(0); }
+.ui-btn--ghost {
+  background: transparent;
+  color: var(--color-fg);
+  border: 1px solid var(--color-border);
+}
+

@@ -1,0 +1,22 @@
+/* Tailwind v4 */
+@import "tailwindcss";
+/* Design tokens */
+@import './tokens.css';
+
+@layer base {
+  html { color-scheme: light dark; }
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+  }
+}
+
+@layer components {
+  /* Example component using Tailwind + tokens */
+  .token-swatch {
+    @apply p-4 border;
+    border-color: var(--color-border);
+    border-radius: var(--radius-m);
+    box-shadow: var(--shadow-1);
+  }
+}
