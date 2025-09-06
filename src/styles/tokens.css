@@ -7,6 +7,19 @@
   --color-muted: #64748b; /* slate-500 */
   --color-border: #e5e7eb; /* gray-200 */
   --color-brand: #4f46e5; /* indigo-600 */
+  --color-primary: #3b82f6; /* blue-500 */
+  --color-primary-hover: #2563eb; /* blue-600 */
+  --color-success: #10b981; /* emerald-500 */
+  --color-warning: #f59e0b; /* amber-500 */
+  --color-danger: #ef4444; /* red-500 */
+  --color-accent: #8b5cf6; /* violet-500 */
+  --color-accent-hover: #7c3aed; /* violet-600 */
+  
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-accent: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --gradient-surface: linear-gradient(135deg, #fdfcfb 0%, #e2d1c3 100%);
+  --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
 
   /* Spacing (4px grid) */
   --space-1: 4px;
@@ -39,6 +52,19 @@
   --color-muted: #94a3b8; /* slate-400 */
   --color-border: #334155; /* slate-700 */
   --color-brand: #818cf8; /* indigo-400 */
+  --color-primary: #60a5fa; /* blue-400 */
+  --color-primary-hover: #3b82f6; /* blue-500 */
+  --color-success: #34d399; /* emerald-400 */
+  --color-warning: #fbbf24; /* amber-400 */
+  --color-danger: #f87171; /* red-400 */
+  --color-accent: #a78bfa; /* violet-400 */
+  --color-accent-hover: #8b5cf6; /* violet-500 */
+  
+  /* Dark gradients */
+  --gradient-primary: linear-gradient(135deg, #4338ca 0%, #312e81 100%);
+  --gradient-accent: linear-gradient(135deg, #ec4899 0%, #be185d 100%);
+  --gradient-surface: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
 
   /* Optional dark-tuned shadow (gentler, lifted) */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 1px rgba(0, 0, 0, 0.35);
@@ -47,29 +73,108 @@
 
 /* Minimal utilities built on tokens */
 .ui-card {
-  background: var(--color-surface);
+  background: var(--gradient-surface);
   color: var(--color-fg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-m);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-2);
   padding: var(--space-4);
+  backdrop-filter: blur(10px);
+  transition: all var(--dur-std) ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.ui-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--gradient-glass);
+  pointer-events: none;
+}
+
+.ui-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
 .ui-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
-  background: var(--color-brand);
+  background: var(--gradient-primary);
   color: white;
+  border: none;
   border-radius: var(--radius-s);
   padding: calc(var(--space-2) + 2px) var(--space-4);
-  transition: background-color var(--dur-fast), transform var(--dur-fast);
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--dur-std) ease;
+  box-shadow: 0 4px 14px 0 rgba(0, 118, 255, 0.39);
+  backdrop-filter: blur(10px);
 }
-.ui-btn:hover { transform: translateY(-1px); }
-.ui-btn:active { transform: translateY(0); }
+
+.ui-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left var(--dur-slow);
+}
+
+.ui-btn:hover { 
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 20px 0 rgba(0, 118, 255, 0.5);
+}
+
+.ui-btn:hover::before {
+  left: 100%;
+}
+
+.ui-btn:active { 
+  transform: translateY(-1px) scale(0.98); 
+}
+
 .ui-btn--ghost {
   background: transparent;
   color: var(--color-fg);
-  border: 1px solid var(--color-border);
+  border: 2px solid var(--color-border);
+  box-shadow: none;
+}
+
+.ui-btn--ghost:hover {
+  background: var(--gradient-glass);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 4px 14px 0 rgba(59, 130, 246, 0.15);
+}
+
+.ui-btn--accent {
+  background: var(--gradient-accent);
+  box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.39);
+}
+
+.ui-btn--accent:hover {
+  box-shadow: 0 6px 20px 0 rgba(139, 92, 246, 0.5);
+}
+
+.ui-btn--success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.39);
+}
+
+.ui-btn--danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.39);
 }
 

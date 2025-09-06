@@ -6,22 +6,12 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { SoundProvider } from './contexts/SoundContext'
 import { GameProvider } from './contexts/GameContext'
 import App from './pages/App'
-import Health from './pages/Health'
-import DBDemo from './pages/DBDemo'
 import './styles/index.css'
 
 const router = createBrowserRouter([
   {
     path: '/',
     element: <App />,
-  },
-  {
-    path: '/health',
-    element: <Health />,
-  },
-  {
-    path: '/db-demo',
-    element: <DBDemo />,
   },
 ])
 

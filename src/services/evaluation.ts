@@ -24,12 +24,45 @@ const MATERIAL_CP: Record<string, number> = {
 }
 
 /**
- * Compute a quick, deterministic material-only evaluation from White's perspective.
+ * Check if a piece is hanging (undefended and can be captured)
+ */
+function countHangingPieces(chess: Chess, color: 'w' | 'b'): number {
+  let hangingValue = 0
+  const board = chess.board()
+  
+  for (let rank = 0; rank < 8; rank++) {
+    for (let file = 0; file < 8; file++) {
+      const piece = board[rank][file]
+      if (!piece || piece.color !== color) continue
+      
+      const square = String.fromCharCode(97 + file) + (8 - rank) // Convert to algebraic notation
+      
+      // Check if this piece can be captured
+      const attackers = chess.attackers(square, color === 'w' ? 'b' : 'w')
+      if (attackers.length === 0) continue
+      
+      // Check if this piece is defended
+      const defenders = chess.attackers(square, color)
+      
+      // Simple hanging detection: if more attackers than defenders, piece is hanging
+      if (attackers.length > defenders.length) {
+        hangingValue += MATERIAL_CP[piece.type] || 0
+      }
+    }
+  }
+  
+  return hangingValue
+}
+
+/**
+ * Compute evaluation including material + hanging pieces penalty.
  * Positive numbers favor White, negative favor Black.
  */
 export function quickEvaluateFenWhiteCp(fen: string, _opts?: EvalOptions): number {
   const chess = new Chess(fen)
   let score = 0
+  
+  // Count material on board
   const board = chess.board()
   for (const row of board) {
     for (const piece of row) {
@@ -38,6 +71,13 @@ export function quickEvaluateFenWhiteCp(fen: string, _opts?: EvalOptions): numbe
       score += piece.color === 'w' ? v : -v
     }
   }
+  
+  // Subtract value of hanging pieces
+  const whiteHanging = countHangingPieces(chess, 'w')
+  const blackHanging = countHangingPieces(chess, 'b')
+  score -= whiteHanging
+  score += blackHanging
+  
   return score
 }
 

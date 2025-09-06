@@ -35,10 +35,10 @@ export function classifyMistake(input: MistakeInput): MistakeClassification {
   const delta = evalAfter - evalBefore
   const cpLoss = delta < 0 ? -delta : 0
 
-  // Base thresholds
-  let tInacc = 60
-  let tMist = 120
-  let tBlun = 250
+  // Base thresholds - lowered for more sensitive detection
+  let tInacc = 30
+  let tMist = 80
+  let tBlun = 150
 
   // Soften thresholds when decisively winning/losing at move time
   const softened = Math.abs(evalBefore) >= 800

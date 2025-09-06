@@ -9,7 +9,7 @@ export interface StockfishWorkerResponse {
   error?: string
 }
 
-// Import the Stockfish worker directly
+// Simple stockfish worker wrapper
 let stockfishWorker: Worker | null = null
 let isInitialized = false
 
@@ -20,44 +20,53 @@ self.onmessage = async (event: MessageEvent<StockfishWorkerMessage>) => {
     switch (type) {
       case 'init':
         if (!isInitialized) {
-          // Create a new worker using the stockfish.worker.js
-          stockfishWorker = new Worker(
-            new URL('../../node_modules/stockfish.wasm/stockfish.worker.js', import.meta.url)
-          )
-          
-          stockfishWorker.onmessage = (e) => {
+          try {
+            // Import stockfish and create worker directly
+            const stockfishModule = await import('stockfish')
+            const Stockfish = stockfishModule.default
+            
+            // Stockfish() returns a Worker
+            stockfishWorker = Stockfish()
+            
+            stockfishWorker.addEventListener('message', (e: MessageEvent) => {
+              self.postMessage({
+                type: 'output',
+                data: e.data
+              } as StockfishWorkerResponse)
+            })
+
+            stockfishWorker.addEventListener('error', (error: ErrorEvent) => {
+              self.postMessage({
+                type: 'error',
+                error: `Stockfish worker error: ${error.message}`
+              } as StockfishWorkerResponse)
+            })
+
+            isInitialized = true
+            
+            // Send UCI command to initialize
+            stockfishWorker.postMessage('uci')
+            
             self.postMessage({
-              type: 'output',
-              data: e.data
+              type: 'ready',
+              data: 'Stockfish worker initialized'
             } as StockfishWorkerResponse)
-          }
-          
-          stockfishWorker.onerror = (error) => {
+          } catch (error) {
             self.postMessage({
               type: 'error',
-              error: error.message
+              error: `Stockfish initialization failed: ${error instanceof Error ? error.message : error}`
             } as StockfishWorkerResponse)
           }
-
-          isInitialized = true
-          
-          // Send UCI command to initialize
-          stockfishWorker.postMessage('uci')
-          
-          self.postMessage({
-            type: 'ready',
-            data: 'Stockfish worker initialized'
-          } as StockfishWorkerResponse)
         }
         break
 
       case 'command':
-        if (stockfishWorker && command) {
+        if (stockfishWorker && command && typeof command === 'string' && command.trim()) {
           stockfishWorker.postMessage(command)
         } else {
           self.postMessage({
             type: 'error',
-            error: 'Engine not initialized or no command provided'
+            error: `Engine not initialized or invalid command provided: ${command}`
           } as StockfishWorkerResponse)
         }
         break

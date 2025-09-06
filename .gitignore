@@ -4,3 +4,12 @@ dist
 *.log
 .env
 
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# Local configuration
+.claude/settings.local.json
+
+# Stockfish engine files (large binaries)
+public/stockfish/
+

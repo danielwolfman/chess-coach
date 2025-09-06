@@ -36,7 +36,7 @@ export interface PVLine {
 }
 
 export class StockfishEngine {
-  private worker: Worker | null = null
+  private stockfish: Worker | null = null
   private isInitialized = false
   private initializationPromise: Promise<string> | null = null
   private messageHandlers = new Map<string, (data: string) => void>()
@@ -47,50 +47,33 @@ export class StockfishEngine {
     this.preload()
   }
 
-  private preload(): void {
-    if (!this.worker) {
-      this.worker = new Worker(new URL('./worker.ts', import.meta.url), {
-        type: 'module'
-      })
-
-      this.worker.onmessage = this.handleWorkerMessage.bind(this)
-      this.worker.onerror = this.handleWorkerError.bind(this)
-    }
-  }
-
-  private handleWorkerMessage(event: MessageEvent<StockfishWorkerResponse>): void {
-    const { type, data, error } = event.data
-
-    switch (type) {
-      case 'ready':
-        this.isInitialized = true
-        break
+  private async preload(): Promise<void> {
+    if (!this.stockfish) {
+      try {
+        // Create a worker using the public Stockfish files
+        this.stockfish = new Worker('/stockfish/stockfish.js')
         
-      case 'output':
-        if (data) {
-          if (data.startsWith('id name Stockfish')) {
-            this.versionString = data
-          }
-          
-          this.messageHandlers.forEach((handler) => {
-            handler(data)
-          })
-        }
-        break
-        
-      case 'error':
-        console.error('Stockfish Worker Error:', error)
-        this.messageHandlers.forEach((handler) => {
-          handler(`ERROR: ${error}`)
+        this.stockfish.addEventListener('message', (e: MessageEvent) => {
+          this.handleMessage(e.data)
         })
-        break
+        
+        this.stockfish.addEventListener('error', (error: ErrorEvent) => {
+          console.error('Stockfish Error:', error.message)
+        })
+      } catch (error) {
+        console.error('Failed to load Stockfish:', error)
+      }
     }
   }
 
-  private handleWorkerError(error: ErrorEvent): void {
-    console.error('Stockfish Worker Error Event:', error)
+  private handleMessage(data: string): void {
+    if (data.startsWith('id name Stockfish')) {
+      this.versionString = data
+      this.isInitialized = true
+    }
+    
     this.messageHandlers.forEach((handler) => {
-      handler(`WORKER_ERROR: ${error.message}`)
+      handler(data)
     })
   }
 
@@ -99,14 +82,17 @@ export class StockfishEngine {
       return this.initializationPromise
     }
 
-    this.initializationPromise = new Promise((resolve, reject) => {
+    this.initializationPromise = new Promise(async (resolve, reject) => {
       if (this.isInitialized && this.versionString) {
         resolve(this.versionString)
         return
       }
 
-      if (!this.worker) {
-        reject(new Error('Worker not available'))
+      // Ensure Stockfish is loaded
+      await this.preload()
+
+      if (!this.stockfish) {
+        reject(new Error('Stockfish not available'))
         return
       }
 
@@ -128,18 +114,23 @@ export class StockfishEngine {
       }
 
       this.addMessageHandler(messageHandler)
-      this.sendMessage({ type: 'init' })
+      this.stockfish.postMessage('uci')
     })
 
     return this.initializationPromise
   }
 
   public sendCommand(command: string): void {
-    if (!this.worker) {
-      throw new Error('Worker not initialized')
+    if (!this.stockfish) {
+      throw new Error('Stockfish not initialized')
     }
 
-    this.sendMessage({ type: 'command', command })
+    if (!command || typeof command !== 'string' || !command.trim()) {
+      console.error('Invalid command attempted:', command)
+      return
+    }
+
+    this.stockfish.postMessage(command)
   }
 
   private async waitForReady(timeoutMs = 5000): Promise<void> {
@@ -359,10 +350,10 @@ export class StockfishEngine {
   }
 
   public destroy(): void {
-    if (this.worker) {
-      this.sendMessage({ type: 'quit' })
-      this.worker.terminate()
-      this.worker = null
+    if (this.stockfish) {
+      this.stockfish.postMessage('quit')
+      this.stockfish.terminate()
+      this.stockfish = null
     }
     
     this.isInitialized = false
@@ -370,12 +361,6 @@ export class StockfishEngine {
     this.messageHandlers.clear()
     this.versionString = ''
     this.activeSearchId = null
-  }
-
-  private sendMessage(message: StockfishWorkerMessage): void {
-    if (this.worker) {
-      this.worker.postMessage(message)
-    }
   }
 }
 

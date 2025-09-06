@@ -8,6 +8,8 @@ import type { Game } from '@/db/indexeddb';
 import { perPlyEvaluation } from '@/services/evaluation';
 import { classifyMistake, type MistakeLabel } from '@/services/mistake';
 import type { PlyAnnotation } from '@/types/annotations';
+import type { MistakeAvailable, CoachState } from '@/types/coach';
+import { createCoachService } from '@/services/coach-service';
 
 interface GameContextType {
   game: ChessGame | null;
@@ -21,6 +23,11 @@ interface GameContextType {
   newGame: () => void;
   resumeGame: (savedGame: Game) => void;
   checkForUnfinishedGame: () => Promise<Game | null>;
+  getAnnotations: () => Record<string, PlyAnnotation>;
+  mistakeAvailable: MistakeAvailable | null;
+  coachState: CoachState;
+  requestMistakeExplanation: (moveIndex: number) => void;
+  clearMistakeAvailable: () => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -30,7 +37,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [gameId, setGameId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const { playMoveSound, playCaptureSound, playCheckSound } = useSound();
+  const [mistakeAvailable, setMistakeAvailable] = useState<MistakeAvailable | null>(null);
+  const [coachState, setCoachState] = useState<CoachState>({
+    isStreaming: false,
+    currentTask: null,
+    streamedText: '',
+    parsedOutput: null,
+    error: null
+  });
+  const { playMoveSound, playCaptureSound, playCheckSound, playMistakeChime } = useSound();
   const evaluationsRef = useRef<Record<string, number>>({});
   const annotationsRef = useRef<Record<string, PlyAnnotation>>({});
 
@@ -60,6 +75,34 @@ export function GameProvider({ children }: { children: ReactNode }) {
           evalBefore: evalRes.evalBefore,
           evalAfter: evalRes.evalAfter,
         });
+        
+        // Debug logging
+        const isPlayerMove = Number(ply) % 2 === 1;
+        console.log(`Move ${ply} (${isPlayerMove ? 'Player' : 'Coach'}):`, {
+          san,
+          evalBefore: evalRes.evalBefore,
+          evalAfter: evalRes.evalAfter,
+          delta: evalRes.delta,
+          classification: classification.label,
+          cpLoss: classification.cpLoss,
+          notes: classification.notes,
+          beforeFen,
+          afterFen: newState.fen
+        });
+
+        // Extra logging for debugging evaluation issues
+        if (Math.abs(evalRes.delta) < 5 && isPlayerMove) {
+          console.log('⚠️ Very small evaluation change detected - material-only eval may be insufficient');
+        }
+
+        // TEMPORARY: Keep 5% random trigger as backup while testing improved evaluation
+        const forceRandomMistake = isPlayerMove && Math.random() < 0.05;
+        if (forceRandomMistake) {
+          console.log('🔥 BACKUP RANDOM MISTAKE TRIGGER (5%)');
+          classification.label = 'mistake';
+          classification.cpLoss = 100;
+        }
+        
         const annotation: PlyAnnotation = {
           ply: Number(ply),
           san,
@@ -73,6 +116,31 @@ export function GameProvider({ children }: { children: ReactNode }) {
           timestamp: Date.now(),
         };
         annotationsRef.current[ply] = annotation;
+
+        // Check if move is a mistake or worse (including inaccuracies), and if it's a player move (odd ply numbers)
+        const isMistakeOrWorse = classification.label === 'inaccuracy' || classification.label === 'mistake' || classification.label === 'blunder';
+        
+        console.log(`Move ${ply} analysis:`, {
+          isPlayerMove,
+          isMistakeOrWorse,
+          classification: classification.label,
+          willTriggerButton: isPlayerMove && isMistakeOrWorse
+        });
+        
+        if (isPlayerMove && isMistakeOrWorse) {
+          const mistakeData: MistakeAvailable = {
+            moveIndex: Number(ply),
+            class: classification.label as 'inaccuracy' | 'mistake' | 'blunder',
+            deltaCp: classification.cpLoss
+          };
+          console.log('Setting mistake available:', mistakeData);
+          setMistakeAvailable(mistakeData);
+          playMistakeChime();
+        } else if (isPlayerMove) {
+          // Clear mistake available if this was a good move
+          console.log('Clearing mistake available - good player move');
+          setMistakeAvailable(null);
+        }
 
         autoSaveService.saveAfterMove(
           gameId,
@@ -207,6 +275,99 @@ export function GameProvider({ children }: { children: ReactNode }) {
     };
   }, [updateGameState]);
 
+  const getAnnotations = useCallback(() => {
+    return { ...annotationsRef.current };
+  }, []);
+
+  const requestMistakeExplanation = useCallback(async (moveIndex: number) => {
+    if (!mistakeAvailable || mistakeAvailable.moveIndex !== moveIndex) {
+      console.warn('No mistake available for moveIndex:', moveIndex);
+      return;
+    }
+
+    if (!gameState) {
+      console.warn('No game state available');
+      return;
+    }
+
+    setCoachState(prev => ({
+      ...prev,
+      isStreaming: true,
+      currentTask: 'mistake_review',
+      streamedText: '',
+      parsedOutput: null,
+      error: null
+    }));
+
+    try {
+      // Create coach service and stream real GPT analysis
+      const coachService = createCoachService();
+      
+      if (!coachService) {
+        // Fallback if no API key configured
+        const fallbackResponse = {
+          name: mistakeAvailable.class === 'blunder' ? 'Missed a critical opportunity' : 
+                mistakeAvailable.class === 'mistake' ? 'Overlooked opponent\'s threat' : 
+                'Could have found a stronger move',
+          why: 'That move allowed your opponent to gain a significant advantage in the position.',
+          better_plan: "Look for moves that improve your piece activity and maintain a solid position.",
+          line: [] as string[]
+        };
+        
+        setCoachState(prev => ({
+          ...prev,
+          isStreaming: false,
+          parsedOutput: fallbackResponse,
+          streamedText: `**${fallbackResponse.name}**\n\n**Why this failed:**\n${fallbackResponse.why}\n\n**Better plan:**\n${fallbackResponse.better_plan}`,
+          error: 'OpenAI API key not configured. Add your API key in Settings to enable AI-powered explanations.'
+        }));
+        return;
+      }
+
+      // Stream real GPT analysis
+      await coachService.streamMistakeExplanation(
+        gameState,
+        annotationsRef.current,
+        moveIndex,
+        1, // Default level
+        {
+          onChunk: (chunk) => {
+            setCoachState(prev => ({
+              ...prev,
+              streamedText: prev.streamedText + chunk
+            }));
+          },
+          onComplete: (output) => {
+            setCoachState(prev => ({
+              ...prev,
+              isStreaming: false,
+              parsedOutput: output
+            }));
+          },
+          onError: (error) => {
+            setCoachState(prev => ({
+              ...prev,
+              isStreaming: false,
+              error: error.message
+            }));
+          }
+        }
+      );
+
+    } catch (error) {
+      console.error('Mistake explanation failed:', error);
+      setCoachState(prev => ({
+        ...prev,
+        isStreaming: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }));
+    }
+  }, [mistakeAvailable, gameState]);
+
+  const clearMistakeAvailable = useCallback(() => {
+    setMistakeAvailable(null);
+  }, []);
+
   const contextValue: GameContextType = {
     game,
     gameState,
@@ -219,6 +380,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     newGame,
     resumeGame,
     checkForUnfinishedGame,
+    getAnnotations,
+    mistakeAvailable,
+    coachState,
+    requestMistakeExplanation,
+    clearMistakeAvailable,
   };
 
   return (

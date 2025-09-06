@@ -8,6 +8,7 @@ type SoundContextType = {
   playMoveSound: () => void
   playCaptureSound: () => void
   playCheckSound: () => void
+  playMistakeChime: () => void
 }
 
 const SoundContext = createContext<SoundContextType | null>(null)
@@ -60,8 +61,13 @@ export function SoundProvider({ children }: { children: ReactNode }) {
     playSound('/assets/sounds/check.wav')
   }
 
+  const playMistakeChime = () => {
+    // Using check sound as chime for now - can be replaced with dedicated chime sound
+    playSound('/assets/sounds/check.wav')
+  }
+
   return (
-    <SoundContext.Provider value={{ soundsEnabled, setSoundsEnabled, playSound, playSoundForce, playMoveSound, playCaptureSound, playCheckSound }}>
+    <SoundContext.Provider value={{ soundsEnabled, setSoundsEnabled, playSound, playSoundForce, playMoveSound, playCaptureSound, playCheckSound, playMistakeChime }}>
       {children}
     </SoundContext.Provider>
   )

@@ -24,14 +24,20 @@ const PIECE_SYMBOLS: PieceSymbols = {
   'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
 }
 
+// More beautiful piece symbols with better Unicode support
+const ENHANCED_PIECE_SYMBOLS: PieceSymbols = {
+  'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+  'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+}
+
 const THEMES = {
   default: {
     light: '#f0d9b5',
     dark: '#b58863',
-    highlight: '#f7ec74',
-    selected: '#f06292',
-    legalMove: '#69f0ae',
-    lastMove: '#ffd54f',
+    highlight: 'rgba(247, 236, 116, 0.8)',
+    selected: 'rgba(240, 98, 146, 0.9)',
+    legalMove: 'rgba(105, 240, 174, 0.7)',
+    lastMove: 'rgba(255, 213, 79, 0.8)',
     check: '#ff5722',
     capture: '#e91e63',
     border: '#8b4513'
@@ -257,7 +263,20 @@ export function Board({
     
     // If we have a selected square and this is a legal move
     if (selectedSquare && isLegalMove(square) && onMove) {
-      const move = { from: selectedSquare, to: square }
+      // Check if this is a promotion move
+      const fromSquare = selectedSquare
+      const toSquare = square
+      const movingPiece = board[7 - parseInt(fromSquare[1]) + 1][fromSquare.charCodeAt(0) - 97]
+      
+      const isPromotion = movingPiece?.type === 'p' && 
+        ((movingPiece.color === 'w' && toSquare[1] === '8') || 
+         (movingPiece.color === 'b' && toSquare[1] === '1'))
+      
+      const move = { 
+        from: fromSquare, 
+        to: toSquare, 
+        promotion: isPromotion ? 'q' : undefined 
+      }
       onMove(move)
       setSelectedSquare(null)
       setLegalMoves([])
@@ -340,7 +359,20 @@ export function Board({
     // Validate the move
     const legalMovesFromDragged = calculateLegalMoves(draggedFrom)
     if (legalMovesFromDragged.includes(square)) {
-      const move = { from: draggedFrom, to: square }
+      // Check if this is a promotion move
+      const fromSquare = draggedFrom
+      const toSquare = square
+      const movingPiece = board[7 - parseInt(fromSquare[1]) + 1][fromSquare.charCodeAt(0) - 97]
+      
+      const isPromotion = movingPiece?.type === 'p' && 
+        ((movingPiece.color === 'w' && toSquare[1] === '8') || 
+         (movingPiece.color === 'b' && toSquare[1] === '1'))
+      
+      const move = { 
+        from: fromSquare, 
+        to: toSquare, 
+        promotion: isPromotion ? 'q' : undefined 
+      }
       onMove(move)
     }
     
@@ -350,15 +382,21 @@ export function Board({
   return (
     <div className="inline-block relative chess-board" style={{ fontSize: 0 }}>
       <div 
-        className="border-2 relative"
+        className="border-2"
         style={{ 
           width: size, 
           height: size, 
           borderColor: themeColors.border,
-          borderRadius: '8px'
+          borderRadius: '8px',
+          background: '#ffffff',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(8, 1fr)',
+          gridTemplateRows: 'repeat(8, 1fr)',
+          position: 'relative'
         }}
       >
-        {ranks.map((rank, rankIndex) => (
+        {ranks.flatMap((rank, rankIndex) => 
           files.map((file, fileIndex) => {
             const piece = board[rankIndex][fileIndex]
             const square = getSquareName(fileIndex, rankIndex)
@@ -385,7 +423,7 @@ export function Board({
             return (
               <div
                 key={square}
-                className={`absolute cursor-pointer select-none flex items-center justify-center chess-square ${
+                className={`cursor-pointer select-none flex items-center justify-center chess-square ${
                   isCapturingSquare ? 'chess-square-capture' : ''
                 } ${
                   isKingInCheck(square) ? 'chess-square-check' : ''
@@ -393,16 +431,13 @@ export function Board({
                   isLastMove(square) ? 'chess-square-last-move' : ''
                 }`}
                 style={{
-                  left: fileIndex * squareSize,
-                  top: rankIndex * squareSize,
-                  width: squareSize,
-                  height: squareSize,
                   backgroundColor: isCapturingSquare ? themeColors.capture : backgroundColor,
                   opacity: isDraggedSquare && isDragging ? 0.5 : 1,
                   border: isDragOverSquare ? `2px solid ${themeColors.selected}` : 'none',
                   boxSizing: 'border-box',
                   transform: isKingInCheck(square) ? 'scale(1.05)' : 'scale(1)',
-                  boxShadow: isKingInCheck(square) ? `0 0 10px ${themeColors.check}` : 'none'
+                  boxShadow: isKingInCheck(square) ? `0 0 10px ${themeColors.check}` : 'none',
+                  position: 'relative'
                 }}
                 onClick={() => handleSquareClick(fileIndex, rankIndex)}
                 onDragOver={(e) => handleDragOver(e, fileIndex, rankIndex)}
@@ -412,12 +447,17 @@ export function Board({
                 {piece && !shouldHidePiece && (
                   <span 
                     className={`text-center leading-none chess-piece chess-piece-hover ${
-                      draggable ? 'cursor-grab active:cursor-grabbing' : ''
+                      draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                    } ${
+                      isSquareSelected ? 'chess-piece-selected' : ''
+                    } ${
+                      isDraggedSquare && isDragging ? 'chess-piece-dragging' : ''
                     }`}
                     style={{ 
                       fontSize: squareSize * 0.7,
                       color: piece.color === 'w' ? '#000' : '#333',
-                      userSelect: 'none'
+                      userSelect: 'none',
+                      textShadow: '1px 1px 2px rgba(0,0,0,0.1)'
                     }}
                     draggable={draggable && piece.color === chess.turn()}
                     onDragStart={(e) => handleDragStart(e, fileIndex, rankIndex)}
@@ -430,7 +470,7 @@ export function Board({
                 {/* Legal move indicator */}
                 {isLegalMoveSquare && !piece && (
                   <div 
-                    className="absolute rounded-full bg-current chess-legal-move-dot"
+                    className="absolute rounded-full bg-current"
                     style={{
                       width: squareSize * 0.3,
                       height: squareSize * 0.3,
@@ -474,10 +514,11 @@ export function Board({
               </div>
             )
           })
-        ))}
+        )}
+      </div>
         
-        {/* Animated pieces */}
-        {animatingPieces.map((animPiece, index) => {
+      {/* Animated pieces */}
+      {animatingPieces.map((animPiece, index) => {
           const fromPos = getSquarePosition(animPiece.from)
           const toPos = getSquarePosition(animPiece.to)
           const elapsed = Date.now() - animPiece.startTime
@@ -517,7 +558,6 @@ export function Board({
             </div>
           )
         })}
-      </div>
       
       {/* Status indicators */}
       {(selectedSquare || draggedFrom || animatingPieces.length > 0) && (
