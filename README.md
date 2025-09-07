@@ -56,3 +56,6 @@ Then open `http://localhost:5173`.
   - See `.github/workflows/deploy.yml`.
   - Push to `main` to build and deploy to Pages.
   - For a custom domain, remove the `BASE_PATH` env in the build step or set it to `/`.
+  - Ensure Settings → Pages → Source is set to "GitHub Actions". If it's set to a branch (e.g., `main`), GitHub will serve the development `index.html` (which points to `/src/main.tsx`) and you'll see MIME-type errors.
+  - If you use a custom domain (e.g., `chess-coach.me`), either set it in Settings → Pages (GitHub will add CNAME), or keep the "Add CNAME" step in the workflow so the artifact contains `dist/CNAME`.
+  - Enable "Enforce HTTPS" so the certificate is provisioned for your domain.

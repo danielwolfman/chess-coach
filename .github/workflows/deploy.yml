@@ -38,6 +38,10 @@ jobs:
       - name: Add 404 fallback
         run: cp dist/index.html dist/404.html
 
+      # Optional: set custom domain for Pages
+      - name: Add CNAME
+        run: echo chess-coach.me > dist/CNAME
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
