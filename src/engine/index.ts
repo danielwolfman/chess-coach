@@ -48,21 +48,21 @@ export class StockfishEngine {
   }
 
   private async preload(): Promise<void> {
-    if (!this.stockfish) {
-      try {
-        // Create a worker using the public Stockfish files
-        this.stockfish = new Worker('/stockfish/stockfish.js')
-        
-        this.stockfish.addEventListener('message', (e: MessageEvent) => {
-          this.handleMessage(e.data)
-        })
-        
-        this.stockfish.addEventListener('error', (error: ErrorEvent) => {
-          console.error('Stockfish Error:', error.message)
-        })
-      } catch (error) {
-        console.error('Failed to load Stockfish:', error)
-      }
+    if (this.stockfish) return
+    try {
+      // Load the pre-copied public worker (see scripts/copy-stockfish.cjs)
+      const worker = new Worker('/stockfish/stockfish.js')
+      this.stockfish = worker
+
+      worker.addEventListener('message', (e: MessageEvent) => {
+        this.handleMessage(e.data)
+      })
+
+      worker.addEventListener('error', (error: ErrorEvent) => {
+        console.error('Stockfish Error:', (error && error.message) || 'unknown')
+      })
+    } catch (err) {
+      console.error('Failed to initialize Stockfish worker:', err)
     }
   }
 

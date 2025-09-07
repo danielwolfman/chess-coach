@@ -10,6 +10,12 @@ export default defineConfig({
     // For GitHub Pages project sites (https://<user>.github.io/<repo>/), set '/<repo>/'
     // You can override this per-build via env var BASE_PATH.
     base: process.env.BASE_PATH || '/',
+    resolve: {
+        alias: {
+            // Help Vite resolve the stockfish package entry for browser usage
+            stockfish: 'stockfish/src/stockfish.js',
+        },
+    },
     plugins: [react(), tsconfigPaths()],
     server: {
         port: 5173,
