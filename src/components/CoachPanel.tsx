@@ -36,31 +36,7 @@ export function CoachPanel({
     }
   }, [coachState.streamedText]);
 
-  // Extract human-readable text from JSON for TTS
-  const extractTtsText = (rawText: string): string => {
-    // Skip TTS if we're clearly in JSON mode (starts with { or has JSON structure)
-    if (rawText.trim().startsWith('{') || rawText.includes('"name"') || rawText.includes('"why"')) {
-      try {
-        // Try to parse as complete JSON first
-        const parsed = JSON.parse(rawText);
-        
-        // If it's a complete mistake analysis object, extract readable parts
-        if (parsed && typeof parsed === 'object' && parsed.name) {
-          const parts = [];
-          if (parsed.name) parts.push(parsed.name);
-          if (parsed.why) parts.push(parsed.why);
-          if (parsed.better_plan) parts.push(`Here's a better plan: ${parsed.better_plan}`);
-          return parts.join('. ');
-        }
-      } catch {
-        // JSON is incomplete - don't send anything to TTS yet
-        return '';
-      }
-    }
-    
-    // For non-JSON text, return as-is
-    return rawText.trim();
-  };
+  // (extractTtsText removed – not used)
 
   // Start TTS when we have parsed output (not during JSON streaming)
   useEffect(() => {

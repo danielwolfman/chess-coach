@@ -1,4 +1,4 @@
-import { StockfishWorkerMessage, StockfishWorkerResponse } from './worker'
+// Note: worker message types are internal to worker; no import needed here
 
 export interface SearchOptions {
   depth?: number

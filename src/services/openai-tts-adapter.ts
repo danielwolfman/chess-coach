@@ -429,38 +429,7 @@ class OpenAITTSSession implements TTSSession {
     }
   }
 
-  /**
-   * Generate audio for complete text using OpenAI TTS API with streaming (for single chunks)
-   */
-  private async generateAudio(text: string): Promise<void> {
-    if (this.stopped || this.isPlaying) return;
-
-    const audioBlob = await this.generateAudioChunk(text);
-    if (audioBlob && !this.stopped) {
-      await this.playAudioBlob(audioBlob);
-    }
-  }
-
-  /**
-   * Play multiple audio blobs sequentially
-   */
-  private async playSequentialAudio(audioBlobs: Blob[]): Promise<void> {
-    if (this.stopped || audioBlobs.length === 0) return;
-    
-    console.log(`[${new Date().toLocaleTimeString()}] TTS playing ${audioBlobs.length} audio chunks sequentially`);
-    
-    for (let i = 0; i < audioBlobs.length; i++) {
-      if (this.stopped) break;
-      
-      console.log(`[${new Date().toLocaleTimeString()}] TTS playing chunk ${i + 1}/${audioBlobs.length}`);
-      await this.playAudioBlob(audioBlobs[i]);
-      
-      // Wait for current audio to finish before playing next
-      while (this.isPlaying && !this.stopped) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
-  }
+  // (unused private helpers removed)
 
 
   /**

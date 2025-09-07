@@ -1,10 +1,10 @@
-import { CoachApiClient, parseStreamedResponse, parseAndValidateMistakeReview } from './coach-api';
+import { CoachApiClient, parseStreamedResponse } from './coach-api';
 import { CoachGuardrails } from './coach-guardrails';
 import { packMistakeReviewContext } from './coach-context';
 import { performDeepAnalysis } from './deep-analysis';
 import type { GameState } from '@/rules/chess';
 import type { PlyAnnotation } from '@/types/annotations';
-import type { MistakeReviewOutput, MistakeReviewContext } from '@/types/coach';
+import type { MistakeReviewOutput } from '@/types/coach';
 
 export interface CoachConfig {
   apiKey: string;
@@ -51,11 +51,11 @@ export class CoachService {
       // Get the move annotation
       const annotation = annotations[String(moveIndex)];
       if (!annotation) {
-        throw new Error(`No annotation found for move ${moveIndex}`);
+        throw new Error();
       }
 
       // Perform deep engine analysis for enriched context
-      let deepAnalysis;
+      let deepAnalysis: any;
       try {
         // Reconstruct FEN before the mistake move
         const fenBefore = this.getFenBeforeMove(gameState, moveIndex);
@@ -105,7 +105,7 @@ export class CoachService {
           const result = await this.guardrails.validateAndRetry(context, fullText);
           callbacks.onComplete(result.output);
         } catch (error) {
-          throw new Error(`Guardrails validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          throw new Error();
         }
       }
 
@@ -121,7 +121,7 @@ export class CoachService {
   /**
    * Get FEN position before a specific move (simplified reconstruction)
    */
-  private getFenBeforeMove(gameState: GameState, moveIndex: number): string {
+  private getFenBeforeMove(gameState: GameState, _moveIndex: number): string {
     // This is a simplified implementation
     // In a complete implementation, you'd reconstruct the exact position
     // For now, we'll use the current FEN as approximation
@@ -166,7 +166,7 @@ function getApiKey(): string | null {
   // Priority order:
   // 1) User settings (localStorage / sessionStorage)
   // 2) Vite env var (VITE_OPENAI_API_KEY)
-  // 3) Node env (OPENAI_API_KEY) – useful in dev/preview
+  // 3) Node env (OPENAI_API_KEY) - useful in dev/preview
   
   // Guard localStorage access (can throw in some browsers/modes)
   try {
@@ -176,7 +176,7 @@ function getApiKey(): string | null {
       if (userApiKey) return userApiKey;
 
       // Fallback: sometimes wizards stash temporarily in sessionStorage
-      const sessionKey = sessionStorage?.getItem?.('chess-coach-openai-api-key');
+      const sessionKey = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('chess-coach-openai-api-key') : null;
       const sessionApiKey = sessionKey?.trim();
       if (sessionApiKey) return sessionApiKey;
     }

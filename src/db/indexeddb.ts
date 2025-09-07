@@ -77,7 +77,7 @@ async function initDB(): Promise<IDBPDatabase<ChessCoachDB>> {
   }
 
   dbInstance = await openDB<ChessCoachDB>(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion, newVersion, transaction) {
+    upgrade(db, oldVersion, _newVersion, _transaction) {
       if (oldVersion < 1) {
         const gamesStore = db.createObjectStore('games', { keyPath: 'id' });
         gamesStore.createIndex('by-created', 'createdAt');

@@ -23,19 +23,19 @@ self.onmessage = async (event: MessageEvent<StockfishWorkerMessage>) => {
           try {
             // Import stockfish and create worker directly
             const stockfishModule = await import('stockfish')
-            const Stockfish = stockfishModule.default
+            const Stockfish = stockfishModule.default as unknown as () => Worker
             
             // Stockfish() returns a Worker
             stockfishWorker = Stockfish()
             
-            stockfishWorker.addEventListener('message', (e: MessageEvent) => {
+            stockfishWorker!.addEventListener('message', (e: MessageEvent) => {
               self.postMessage({
                 type: 'output',
                 data: e.data
               } as StockfishWorkerResponse)
             })
 
-            stockfishWorker.addEventListener('error', (error: ErrorEvent) => {
+            stockfishWorker!.addEventListener('error', (error: ErrorEvent) => {
               self.postMessage({
                 type: 'error',
                 error: `Stockfish worker error: ${error.message}`
@@ -45,7 +45,7 @@ self.onmessage = async (event: MessageEvent<StockfishWorkerMessage>) => {
             isInitialized = true
             
             // Send UCI command to initialize
-            stockfishWorker.postMessage('uci')
+            if (stockfishWorker) stockfishWorker.postMessage('uci')
             
             self.postMessage({
               type: 'ready',

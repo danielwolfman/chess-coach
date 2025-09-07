@@ -38,11 +38,11 @@ function countHangingPieces(chess: Chess, color: 'w' | 'b'): number {
       const square = String.fromCharCode(97 + file) + (8 - rank) // Convert to algebraic notation
       
       // Check if this piece can be captured
-      const attackers = chess.attackers(square, color === 'w' ? 'b' : 'w')
+      const attackers = (chess as any).attackers(square as any, color === 'w' ? 'b' : 'w')
       if (attackers.length === 0) continue
       
       // Check if this piece is defended
-      const defenders = chess.attackers(square, color)
+      const defenders = (chess as any).attackers(square as any, color)
       
       // Simple hanging detection: if more attackers than defenders, piece is hanging
       if (attackers.length > defenders.length) {

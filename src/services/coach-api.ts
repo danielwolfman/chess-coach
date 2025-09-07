@@ -1,4 +1,4 @@
-import type { MistakeReviewContext, MistakeReviewOutput, CoachTask } from '@/types/coach';
+import type { MistakeReviewContext, MistakeReviewOutput } from '@/types/coach';
 
 export interface StreamResponse {
   stream: ReadableStream<Uint8Array>;

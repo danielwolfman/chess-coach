@@ -24,11 +24,7 @@ const PIECE_SYMBOLS: PieceSymbols = {
   'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
 }
 
-// More beautiful piece symbols with better Unicode support
-const ENHANCED_PIECE_SYMBOLS: PieceSymbols = {
-  'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
-  'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
-}
+// (ENHANCED_PIECE_SYMBOLS removed – unused)
 
 const THEMES = {
   default: {
@@ -213,8 +209,6 @@ export function Board({
       const newBoard = newGame.board()
       
       // Use the lastMove to determine animation
-      const fromFile = lastMove.from.charCodeAt(0) - 'a'.charCodeAt(0)
-      const fromRank = 8 - parseInt(lastMove.from[1])
       const toFile = lastMove.to.charCodeAt(0) - 'a'.charCodeAt(0)
       const toRank = 8 - parseInt(lastMove.to[1])
       

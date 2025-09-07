@@ -1,4 +1,4 @@
-import { getStockfishEngine, type SearchResult } from '@/engine'
+import { getStockfishEngine, type SearchResult, type PVLine } from '@/engine'
 
 export class ResignationController {
   private streak = 0
@@ -43,7 +43,7 @@ export async function assessResignation(
 
   // If lastResult already contains PVs, inspect them first
   const lines = lastResult.pvs ?? (lastResult.pv ? [{ multipv: 1, pv: lastResult.pv, score_cp: lastResult.score_cp }] as any : [])
-  const hasDrawishInExisting = lines.some(l => (l.mate == null) && (typeof l.score_cp === 'number') && Math.abs(l.score_cp) <= 100)
+  const hasDrawishInExisting = (lines as PVLine[]).some((l: PVLine) => (l.mate == null) && (typeof l.score_cp === 'number') && Math.abs(l.score_cp) <= 100)
   if (hasDrawishInExisting) {
     return { immediateMatePly: null, hasDrawishResource: true }
   }
@@ -52,11 +52,10 @@ export async function assessResignation(
   try {
     const probe = await engine.search(fen, { depth: 8, multipv: 3 })
     const checkLines = probe.pvs ?? []
-    const drawish = checkLines.some(l => (l.mate == null) && (typeof l.score_cp === 'number') && Math.abs(l.score_cp) <= 100)
+    const drawish = (checkLines as PVLine[]).some((l: PVLine) => (l.mate == null) && (typeof l.score_cp === 'number') && Math.abs(l.score_cp) <= 100)
     return { immediateMatePly: null, hasDrawishResource: drawish }
   } catch {
     // On any failure, be conservative and avoid resigning spuriously
     return { immediateMatePly: null, hasDrawishResource: true }
   }
 }
-

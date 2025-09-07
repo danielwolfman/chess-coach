@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import { useState, useEffect, useMemo, useRef } from 'react'
 
 import AppLayout from '@/components/AppLayout'
-import { Skeleton } from '@/components/Skeleton'
 import { SoundToggle } from '@/components/SoundToggle'
 import { LevelBadge } from '@/components/LevelBadge'
 import { ResumeDialog } from '@/components/ResumeDialog'
@@ -427,20 +426,19 @@ export default function App() {
         showDevRationale={env.VITE_DEV_SHOW_RATIONALE}
         mistakeContext={{
           task: 'mistake_review',
-          playerColor: gameState?.currentPlayer === 'white' ? 'white' : 'black',
+          playerColor: gameState?.turn === 'w' ? 'white' : 'black',
           level: baseLevel,
           fen: gameState?.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-          lastMovesSan: gameState?.moves?.map(m => m.san) || ['e4', 'e5', 'Nf3', 'Nc6'],
+          lastMovesSan: gameState?.history?.map(m => m.san) || ['e4', 'e5', 'Nf3', 'Nc6'],
           pgnHash: 'debug-session',
-          annotations: {
-            eval_before: 25,
-            eval_after: -150,
-            delta_cp: -175,
-            move_classification: 'mistake',
-            best_line: ['Nf3', 'Nc6', 'Bc4', 'd6', 'O-O', 'Be6'],
-            refutation_line: ['Qh5+', 'g6', 'Qxd5', 'Nf6', 'Qb3'],
-            motifs: ['fork', 'pin', 'double-attack']
-          }
+            annotations: {
+              eval_before: 25,
+              eval_after: -150,
+              delta_cp: -175,
+              best_line: ['Nf3', 'Nc6', 'Bc4', 'd6', 'O-O', 'Be6'],
+              refutation_line: ['Qh5+', 'g6', 'Qxd5', 'Nf6', 'Qb3'],
+              motifs: ['fork', 'pin', 'double-attack']
+            }
         }}
       />
       <div className="ui-card">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+// No React hooks needed here
 
 interface WelcomeOverlayProps {
   isOpen: boolean;

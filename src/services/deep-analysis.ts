@@ -223,7 +223,7 @@ function hasUndefendedPieces(chess: Chess): boolean {
           // Simplified heuristic: count pieces that might be hanging
           // In a real implementation, you'd check if the piece is actually defended
           const square = String.fromCharCode(97 + file) + String(8 - rank);
-          const attacks = chess.moves({ square, verbose: false });
+          const attacks = chess.moves({ square: square as any, verbose: false });
           if (attacks.length === 0) {
             undefendedCount++;
           }

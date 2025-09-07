@@ -148,7 +148,7 @@ Please help the player understand what went wrong with their move and suggest a 
       ...prev,
       isStreaming: true,
       streamedText: '',
-      currentTask: { type: 'mistake_review', moveIndex: 0 },
+      currentTask: 'mistake_review',
       error: null
     }));
 

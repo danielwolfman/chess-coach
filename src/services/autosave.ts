@@ -20,7 +20,7 @@ export interface AutoSaveOptions {
 }
 
 class AutoSaveService {
-  private debounceTimeout: number | null = null;
+  private debounceTimeout: ReturnType<typeof setTimeout> | null = null;
   private pendingSnapshot: AutoSaveSnapshot | null = null;
   private options: Required<AutoSaveOptions>;
   private isEnabled = true;
