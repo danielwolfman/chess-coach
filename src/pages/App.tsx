@@ -9,7 +9,7 @@ import { ResumeDialog } from '@/components/ResumeDialog'
 import { Board } from '@/components/Board'
 import { CoachPanel } from '@/components/CoachPanel'
 import { TTSSettings } from '@/components/TTSSettings'
-import { ttsAdapter } from '@/services/tts-adapter'
+import { ttsAdapter, type TTSProvider } from '@/services/tts-adapter'
 import { APISetupWizard } from '@/components/APISetupWizard'
 import { AIStatusIndicator } from '@/components/AIStatusIndicator'
 import { WelcomeOverlay } from '@/components/WelcomeOverlay'
@@ -45,6 +45,7 @@ export default function App() {
   const [showSetupWizard, setShowSetupWizard] = useState(false)
   const [showWelcome, setShowWelcome] = useState(false)
   const [isTTSEnabled, setIsTTSEnabled] = useState(true)
+  const [currentTTSProvider, setCurrentTTSProvider] = useState<TTSProvider>('openai')
 
   useEffect(() => {
     const checkForResume = async () => {
@@ -62,7 +63,7 @@ export default function App() {
     checkForResume()
   }, [checkForUnfinishedGame])
 
-  // Load TTS enabled state on mount
+  // Load TTS enabled state and provider on mount
   useEffect(() => {
     const loadTTSSettings = () => {
       try {
@@ -71,12 +72,28 @@ export default function App() {
           const settings = JSON.parse(saved);
           setIsTTSEnabled(settings.enabled ?? true);
         }
+        
+        // Load current TTS provider
+        const provider = ttsAdapter.getProvider();
+        setCurrentTTSProvider(provider);
       } catch (e) {
         console.warn('Failed to load TTS settings:', e);
       }
     }
     loadTTSSettings()
   }, [])
+
+  // Listen for TTS provider changes
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      const provider = ttsAdapter.getProvider();
+      if (provider !== currentTTSProvider) {
+        setCurrentTTSProvider(provider);
+      }
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [currentTTSProvider])
 
   // Check if welcome overlay or setup wizard should be shown
   useEffect(() => {
@@ -338,6 +355,19 @@ export default function App() {
     }
   }
 
+  const getTTSProviderIcon = (provider: TTSProvider) => {
+    switch (provider) {
+      case 'openai':
+        return '🤖'
+      case 'google-cloud':
+        return '☁️'
+      case 'web-speech':
+        return '🌐'
+      default:
+        return '🎤'
+    }
+  }
+
   const handleTTSToggle = () => {
     const newEnabled = !isTTSEnabled
     setIsTTSEnabled(newEnabled)
@@ -363,9 +393,9 @@ export default function App() {
               ? 'ui-btn--success' 
               : 'ui-btn--ghost'
           }`}
-          title={`Text-to-Speech is ${isTTSEnabled ? 'enabled' : 'disabled'} - Click to toggle`}
+          title={`Text-to-Speech (${currentTTSProvider.toUpperCase()}) is ${isTTSEnabled ? 'enabled' : 'disabled'} - Click to toggle`}
         >
-          {isTTSEnabled ? '🔊' : '🔇'} TTS
+          {isTTSEnabled ? '🔊' : '🔇'} {getTTSProviderIcon(currentTTSProvider)} TTS
         </button>
         <button
           onClick={() => setShowTTSSettings(true)}
@@ -395,6 +425,23 @@ export default function App() {
         resignedInfo={resignedInfo}
         devRationale={coachRationale}
         showDevRationale={env.VITE_DEV_SHOW_RATIONALE}
+        mistakeContext={{
+          task: 'mistake_review',
+          playerColor: gameState?.currentPlayer === 'white' ? 'white' : 'black',
+          level: baseLevel,
+          fen: gameState?.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+          lastMovesSan: gameState?.moves?.map(m => m.san) || ['e4', 'e5', 'Nf3', 'Nc6'],
+          pgnHash: 'debug-session',
+          annotations: {
+            eval_before: 25,
+            eval_after: -150,
+            delta_cp: -175,
+            move_classification: 'mistake',
+            best_line: ['Nf3', 'Nc6', 'Bc4', 'd6', 'O-O', 'Be6'],
+            refutation_line: ['Qh5+', 'g6', 'Qxd5', 'Nf6', 'Qb3'],
+            motifs: ['fork', 'pin', 'double-attack']
+          }
+        }}
       />
       <div className="ui-card">
         <div className="flex items-center justify-between mb-2">

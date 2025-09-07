@@ -164,19 +164,37 @@ export function createCoachService(): CoachService | null {
  */
 function getApiKey(): string | null {
   // Priority order:
-  // 1. Environment variable (for development)
-  // 2. User settings (for production)
-  // 3. Stored credentials (if implemented)
+  // 1) User settings (localStorage / sessionStorage)
+  // 2) Vite env var (VITE_OPENAI_API_KEY)
+  // 3) Node env (OPENAI_API_KEY) – useful in dev/preview
   
-  if (typeof window !== 'undefined') {
-    // Browser environment - check localStorage for user-provided key
-    const userApiKey = localStorage.getItem('chess-coach-openai-api-key');
-    if (userApiKey) return userApiKey;
+  // Guard localStorage access (can throw in some browsers/modes)
+  try {
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('chess-coach-openai-api-key');
+      const userApiKey = raw?.trim();
+      if (userApiKey) return userApiKey;
+
+      // Fallback: sometimes wizards stash temporarily in sessionStorage
+      const sessionKey = sessionStorage?.getItem?.('chess-coach-openai-api-key');
+      const sessionApiKey = sessionKey?.trim();
+      if (sessionApiKey) return sessionApiKey;
+    }
+  } catch (e) {
+    // Non-fatal; continue to env fallbacks
+    console.warn('Could not access web storage for API key:', e);
   }
 
-  // Development environment variable
-  const envKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (envKey) return envKey;
+  // Vite env var
+  const envKey = (import.meta as any)?.env?.VITE_OPENAI_API_KEY as string | undefined;
+  if (envKey && String(envKey).trim()) return String(envKey).trim();
+
+  // Node env (useful during local dev / tests)
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nodeKey = (globalThis as any)?.process?.env?.OPENAI_API_KEY;
+    if (nodeKey && String(nodeKey).trim()) return String(nodeKey).trim();
+  } catch {}
 
   return null;
 }

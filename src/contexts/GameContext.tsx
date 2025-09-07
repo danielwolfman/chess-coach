@@ -319,7 +319,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           isStreaming: false,
           parsedOutput: fallbackResponse,
           streamedText: `**${fallbackResponse.name}**\n\n**Why this failed:**\n${fallbackResponse.why}\n\n**Better plan:**\n${fallbackResponse.better_plan}`,
-          error: 'OpenAI API key not configured. Add your API key in Settings to enable AI-powered explanations.'
+          error: 'AI analysis API key not configured. Add your API key in Settings to enable AI-powered explanations.'
         }));
         return;
       }

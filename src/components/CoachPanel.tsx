@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import type { CoachState, MistakeReviewOutput } from '@/types/coach';
+import type { CoachState, MistakeReviewOutput, MistakeReviewContext } from '@/types/coach';
 import { ttsAdapter } from '@/services/tts-adapter';
+import { DebugModal } from './DebugModal';
 
 interface CoachPanelProps {
   coachState: CoachState;
@@ -10,6 +11,7 @@ interface CoachPanelProps {
   resignedInfo?: { reason: string } | null;
   devRationale?: string;
   showDevRationale?: boolean;
+  mistakeContext?: MistakeReviewContext;
 }
 
 export function CoachPanel({
@@ -19,10 +21,12 @@ export function CoachPanel({
   onClearMistakeAvailable,
   resignedInfo,
   devRationale,
-  showDevRationale
+  showDevRationale,
+  mistakeContext
 }: CoachPanelProps) {
   const [ttsSession, setTtsSession] = useState<any>(null);
   const [copyFeedback, setCopyFeedback] = useState<string>('');
+  const [debugModalOpen, setDebugModalOpen] = useState<boolean>(false);
   const streamedTextRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll streamed text
@@ -32,27 +36,66 @@ export function CoachPanel({
     }
   }, [coachState.streamedText]);
 
-  // Start TTS when streaming begins
+  // Extract human-readable text from JSON for TTS
+  const extractTtsText = (rawText: string): string => {
+    // Skip TTS if we're clearly in JSON mode (starts with { or has JSON structure)
+    if (rawText.trim().startsWith('{') || rawText.includes('"name"') || rawText.includes('"why"')) {
+      try {
+        // Try to parse as complete JSON first
+        const parsed = JSON.parse(rawText);
+        
+        // If it's a complete mistake analysis object, extract readable parts
+        if (parsed && typeof parsed === 'object' && parsed.name) {
+          const parts = [];
+          if (parsed.name) parts.push(parsed.name);
+          if (parsed.why) parts.push(parsed.why);
+          if (parsed.better_plan) parts.push(`Here's a better plan: ${parsed.better_plan}`);
+          return parts.join('. ');
+        }
+      } catch {
+        // JSON is incomplete - don't send anything to TTS yet
+        return '';
+      }
+    }
+    
+    // For non-JSON text, return as-is
+    return rawText.trim();
+  };
+
+  // Start TTS when we have parsed output (not during JSON streaming)
   useEffect(() => {
-    if (coachState.isStreaming && !ttsSession && coachState.streamedText) {
+    if (coachState.parsedOutput && !ttsSession) {
       const session = ttsAdapter.begin(`coach-${Date.now()}`);
       setTtsSession(session);
-      session.feed(coachState.streamedText);
-    } else if (ttsSession && coachState.streamedText) {
-      ttsSession.feed(coachState.streamedText);
+      
+      // Extract readable text from parsed output
+      const parts = [];
+      if (coachState.parsedOutput.name) parts.push(coachState.parsedOutput.name);
+      if (coachState.parsedOutput.why) parts.push(coachState.parsedOutput.why);
+      if (coachState.parsedOutput.better_plan) parts.push(`Here's a better plan: ${coachState.parsedOutput.better_plan}`);
+      const ttsText = parts.join('. ');
+      
+      if (ttsText) session.feed(ttsText);
     }
-  }, [coachState.isStreaming, coachState.streamedText, ttsSession]);
+  }, [coachState.parsedOutput, ttsSession]);
 
-  // Stop TTS when streaming completes
+  // Cleanup TTS when streaming completes and TTS finishes
   useEffect(() => {
     if (!coachState.isStreaming && ttsSession) {
-      // Give TTS a moment to finish current sentence before stopping
-      setTimeout(() => {
-        if (ttsSession) {
-          ttsSession.stop('streaming_completed');
+      // Don't stop TTS immediately - let it finish playing current audio
+      // Check periodically if TTS is still active, and clean up when done
+      const checkTtsComplete = () => {
+        if (ttsSession && !ttsSession.isActive()) {
+          console.log('TTS session completed, cleaning up');
+          setTtsSession(null);
+        } else if (ttsSession) {
+          // Check again in 500ms if still active
+          setTimeout(checkTtsComplete, 500);
         }
-        setTtsSession(null);
-      }, 1000);
+      };
+      
+      // Start checking after a brief delay to allow processing
+      setTimeout(checkTtsComplete, 1000);
     }
   }, [coachState.isStreaming, ttsSession]);
 
@@ -116,7 +159,16 @@ export function CoachPanel({
   return (
     <div className="ui-card">
       <div className="flex items-center justify-between mb-1">
-        <h3 className="text-base font-medium">Coach</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-base font-medium">Coach</h3>
+          <button
+            onClick={() => setDebugModalOpen(true)}
+            className="px-2 py-1 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-md transition-colors"
+            title="Debug streaming functionality"
+          >
+            Debug
+          </button>
+        </div>
         {mistakeAvailable && !coachState.isStreaming && (
           <div className="flex items-center gap-2">
             <button
@@ -235,6 +287,13 @@ export function CoachPanel({
           {devRationale}
         </div>
       )}
+
+      {/* Debug Modal */}
+      <DebugModal
+        isOpen={debugModalOpen}
+        onClose={() => setDebugModalOpen(false)}
+        mistakeContext={mistakeContext}
+      />
     </div>
   );
 }

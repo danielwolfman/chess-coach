@@ -8,7 +8,7 @@ export class OpenAITTSAdapter implements TTSAdapter {
   private apiKey: string;
   private baseUrl: string;
   private enabled = true;
-  private voice: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer' = 'alloy';
+  private voice: 'alloy' | 'ash' | 'ballad' | 'coral' | 'echo' | 'fable' | 'onyx' | 'nova' | 'sage' | 'shimmer' | 'verse' = 'alloy';
   private speed = 1.0;
   private activeSessions = new Map<string, OpenAITTSSession>();
 
@@ -40,7 +40,7 @@ export class OpenAITTSAdapter implements TTSAdapter {
   }
 
   setVoice(voiceId: string): void {
-    const validVoices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+    const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'onyx', 'nova', 'sage', 'shimmer', 'verse'];
     if (validVoices.includes(voiceId)) {
       this.voice = voiceId as typeof this.voice;
       this.saveSettings();
@@ -67,11 +67,16 @@ export class OpenAITTSAdapter implements TTSAdapter {
   getVoices(): any[] {
     return [
       { id: 'alloy', name: 'Alloy', description: 'Neutral, balanced voice' },
+      { id: 'ash', name: 'Ash', description: 'Clear, authoritative voice' },
+      { id: 'ballad', name: 'Ballad', description: 'Melodic, expressive voice' },
+      { id: 'coral', name: 'Coral', description: 'Warm, friendly voice' },
       { id: 'echo', name: 'Echo', description: 'Clear, articulate voice' },
       { id: 'fable', name: 'Fable', description: 'Warm, storytelling voice' },
       { id: 'onyx', name: 'Onyx', description: 'Deep, authoritative voice' },
       { id: 'nova', name: 'Nova', description: 'Bright, energetic voice' },
-      { id: 'shimmer', name: 'Shimmer', description: 'Soft, gentle voice' }
+      { id: 'sage', name: 'Sage', description: 'Wise, thoughtful voice' },
+      { id: 'shimmer', name: 'Shimmer', description: 'Soft, gentle voice' },
+      { id: 'verse', name: 'Verse', description: 'Poetic, rhythmic voice' }
     ];
   }
 
@@ -108,7 +113,8 @@ export class OpenAITTSAdapter implements TTSAdapter {
 }
 
 /**
- * OpenAI TTS session implementation with sentence-buffered streaming
+ * OpenAI TTS session implementation with full-text processing
+ * Optimized to use single API call instead of sentence-by-sentence processing
  */
 class OpenAITTSSession implements TTSSession {
   private requestId: string;
@@ -120,13 +126,19 @@ class OpenAITTSSession implements TTSSession {
   private onCleanup: () => void;
   
   private textBuffer = '';
-  private audioQueue: HTMLAudioElement[] = [];
   private isPlaying = false;
   private stopped = false;
   private currentAudio: HTMLAudioElement | null = null;
+  private processingAudio = false;
   
-  // Sentence boundary regex - more sophisticated than Web Speech version
-  private static SENTENCE_REGEX = /([.!?]+\s+|[.!?]+$)/g;
+  // Sentence-by-sentence processing
+  private processedText = ''; // Text that has already been sent for TTS
+  private audioQueue: HTMLAudioElement[] = [];
+  private playingQueue = false;
+  
+  // Debounce timer for processing complete text
+  private processTimer: NodeJS.Timeout | null = null;
+  private static PROCESS_DELAY = 200; // ms to wait for sentence completion
 
   constructor(
     requestId: string,
@@ -146,11 +158,46 @@ class OpenAITTSSession implements TTSSession {
     this.onCleanup = onCleanup;
   }
 
+  /**
+   * Clean text to remove JSON artifacts and make it suitable for TTS
+   */
+  private cleanTextForTts(text: string): string {
+    // Normalize whitespace first
+    let s = text.replace(/\u200B/g, '').replace(/\s+/g, ' ').trim();
+
+    // Remove leading JSON wrapper and key preceding the current value (dotAll to span newlines)
+    s = s
+      .replace(/^\s*\{[\s\S]*?"name"\s*:\s*"/is, '')
+      .replace(/",?\s*"why"\s*:\s*"/is, '. ')
+      .replace(/",?\s*"better_plan"\s*:\s*"/is, '. Here\'s a better plan: ')
+      .replace(/",?\s*"line"\s*:\s*\[[\s\S]*?\]/is, '')
+      .replace(/"\s*\}?\s*$/is, '');
+
+    // Strip any stray braces/quotes left at boundaries
+    s = s.replace(/^[\s"'{}\[\]]+|[\s"'{}\[\]]+$/g, '');
+
+    // Unescape quotes and tidy spaces
+    s = s.replace(/\\"/g, '"').replace(/\s{2,}/g, ' ').trim();
+
+    return s;
+  }
+
   feed(textChunk: string): void {
     if (!this.enabled || this.stopped) return;
 
     this.textBuffer += textChunk;
-    this.processBuffer(); // Fire and forget - don't await to keep interface compatible
+    
+    // Check for complete sentences immediately
+    this.processAvailableSentences();
+    
+    // Also set a debounce timer for any remaining text
+    if (this.processTimer) {
+      clearTimeout(this.processTimer);
+    }
+    
+    this.processTimer = setTimeout(() => {
+      this.processRemainingText();
+    }, OpenAITTSSession.PROCESS_DELAY);
   }
 
   stop(reason = 'user_requested'): void {
@@ -158,75 +205,195 @@ class OpenAITTSSession implements TTSSession {
     
     this.stopped = true;
     this.textBuffer = '';
+    this.processedText = '';
+    
+    // Clear debounce timer
+    if (this.processTimer) {
+      clearTimeout(this.processTimer);
+      this.processTimer = null;
+    }
     
     // Stop current audio
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio.currentTime = 0;
+      this.currentAudio = null;
     }
     
-    // Clear queue
-    this.audioQueue.forEach(audio => {
+    // Clear audio queue
+    for (const audio of this.audioQueue) {
       audio.pause();
-      audio.currentTime = 0;
-    });
+      if (audio.src) URL.revokeObjectURL(audio.src);
+    }
     this.audioQueue = [];
+    this.playingQueue = false;
+    
     this.isPlaying = false;
+    this.processingAudio = false;
     
     console.log(`OpenAI TTS session ${this.requestId} stopped: ${reason}`);
     this.onCleanup();
   }
 
   isActive(): boolean {
-    return !this.stopped && (this.isPlaying || this.audioQueue.length > 0);
+    return !this.stopped && (this.isPlaying || this.processingAudio || this.playingQueue || this.textBuffer.length > 0 || this.audioQueue.length > 0);
   }
 
   /**
-   * Process text buffer and extract complete sentences
+   * Process complete sentences immediately as they arrive
    */
-  private async processBuffer(): Promise<void> {
-    const sentences = this.extractSentences(this.textBuffer);
-    
-    for (const sentence of sentences) {
-      const cleaned = sentence.trim();
-      if (cleaned && cleaned.length > 3) { // Skip very short fragments
-        await this.generateAudio(cleaned);
-      }
-    }
-    
-    this.processQueue();
-  }
-
-  /**
-   * Extract complete sentences from buffer
-   */
-  private extractSentences(text: string): string[] {
-    const sentences: string[] = [];
-    let lastIndex = 0;
-    let match;
-
-    OpenAITTSSession.SENTENCE_REGEX.lastIndex = 0;
-    
-    while ((match = OpenAITTSSession.SENTENCE_REGEX.exec(text)) !== null) {
-      const sentence = text.substring(lastIndex, match.index + match[0].length);
-      if (sentence.trim()) {
-        sentences.push(sentence);
-      }
-      lastIndex = match.index + match[0].length;
-    }
-    
-    // Update buffer with remaining text
-    this.textBuffer = text.substring(lastIndex);
-    
-    return sentences;
-  }
-
-  /**
-   * Generate audio for a sentence using OpenAI TTS API
-   */
-  private async generateAudio(text: string): Promise<void> {
+  private processAvailableSentences(): void {
     if (this.stopped) return;
+    
+    const unprocessedText = this.textBuffer.slice(this.processedText.length);
+    
+    // Find complete sentences (ending with . ! ? or line breaks)
+    const sentenceRegex = /[.!?]+(?:\s|$)|(?:\n\s*){2,}/g;
+    let match;
+    let lastCompleteIndex = 0;
+    
+    while ((match = sentenceRegex.exec(unprocessedText)) !== null) {
+      lastCompleteIndex = match.index + match[0].length;
+    }
+    
+    if (lastCompleteIndex > 0) {
+      const completeSentences = unprocessedText.slice(0, lastCompleteIndex).trim();
+      if (completeSentences) {
+        // Filter out JSON artifacts from TTS text
+        const cleanedText = this.cleanTextForTts(completeSentences);
+        if (cleanedText.trim()) {
+          console.log(`[${new Date().toLocaleTimeString()}] TTS processing: "${cleanedText}"`);
+          
+          this.processedText += unprocessedText.slice(0, lastCompleteIndex);
+          this.generateAudioForText(cleanedText);
+        } else {
+          // Skip empty or JSON-only content
+          this.processedText += unprocessedText.slice(0, lastCompleteIndex);
+        }
+      }
+    }
+  }
 
+  /**
+   * Process any remaining text when streaming completes
+   */
+  private async processRemainingText(): Promise<void> {
+    if (this.stopped) return;
+    
+    const remainingText = this.textBuffer.slice(this.processedText.length).trim();
+    if (remainingText) {
+      const cleanedText = this.cleanTextForTts(remainingText);
+      if (cleanedText.trim()) {
+        console.log(`[${new Date().toLocaleTimeString()}] TTS processing remaining: "${cleanedText}"`);
+        this.processedText = this.textBuffer;
+        await this.generateAudioForText(cleanedText);
+      } else {
+        this.processedText = this.textBuffer;
+      }
+    }
+  }
+
+  /**
+   * Generate audio for text and add to queue
+   */
+  private async generateAudioForText(text: string): Promise<void> {
+    if (this.stopped || !text.trim()) return;
+    
+    try {
+      const audioBlob = await this.generateAudioChunk(text);
+      if (audioBlob && !this.stopped) {
+        const audio = await this.createAudioElement(audioBlob);
+        this.audioQueue.push(audio);
+        
+        // Start playing queue if not already playing
+        if (!this.playingQueue) {
+          this.playAudioQueue();
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to generate audio for text:', error);
+    }
+  }
+
+  /**
+   * Create audio element from blob
+   */
+  private async createAudioElement(audioBlob: Blob): Promise<HTMLAudioElement> {
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(audioUrl);
+    audio.volume = 0.8;
+    audio.preload = 'auto';
+    
+    // Clean up URL when audio ends or errors
+    const cleanup = () => {
+      URL.revokeObjectURL(audioUrl);
+    };
+    
+    audio.addEventListener('ended', cleanup);
+    audio.addEventListener('error', cleanup);
+    
+    return audio;
+  }
+
+  /**
+   * Play audio queue sequentially
+   */
+  private async playAudioQueue(): Promise<void> {
+    if (this.playingQueue || this.stopped) return;
+    
+    this.playingQueue = true;
+    console.log(`[${new Date().toLocaleTimeString()}] TTS starting playback`);
+    
+    while (this.audioQueue.length > 0 && !this.stopped) {
+      const audio = this.audioQueue.shift()!;
+      
+      try {
+        this.currentAudio = audio;
+        this.isPlaying = true;
+        
+        await this.playAudio(audio);
+        
+      } catch (error) {
+        console.warn('Failed to play audio segment:', error);
+      } finally {
+        this.currentAudio = null;
+        this.isPlaying = false;
+      }
+    }
+    
+    this.playingQueue = false;
+    console.log(`[${new Date().toLocaleTimeString()}] TTS playback completed`);
+  }
+
+  /**
+   * Play single audio element
+   */
+  private playAudio(audio: HTMLAudioElement): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const onEnded = () => {
+        audio.removeEventListener('ended', onEnded);
+        audio.removeEventListener('error', onError);
+        resolve();
+      };
+      
+      const onError = (_e: Event) => {
+        audio.removeEventListener('ended', onEnded);
+        audio.removeEventListener('error', onError);
+        reject(new Error('Audio playback failed'));
+      };
+      
+      audio.addEventListener('ended', onEnded);
+      audio.addEventListener('error', onError);
+      
+      audio.play().catch(reject);
+    });
+  }
+
+
+  /**
+   * Generate audio chunk and return blob
+   */
+  private async generateAudioChunk(text: string): Promise<Blob | null> {
     try {
       const response = await fetch(`${this.baseUrl}/audio/speech`, {
         method: 'POST',
@@ -235,80 +402,96 @@ class OpenAITTSSession implements TTSSession {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'tts-1', // or 'tts-1-hd' for higher quality
+          model: 'gpt-4o-mini-tts',
           input: text,
           voice: this.voice,
           response_format: 'mp3',
-          speed: this.speed
+          speed: this.speed,
+          instructions: 'Speak as a friendly, encouraging chess coach with a warm and supportive tone.'
         })
       });
 
       if (!response.ok) {
         if (response.status === 429) {
           console.warn('OpenAI TTS: API quota exceeded or billing issue. Please check your OpenAI account.');
-          return; // Silently skip this request
+          return null;
         }
-        throw new Error(`OpenAI TTS API error: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`OpenAI TTS API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-
-      // Configure audio element
-      audio.volume = 0.8;
-      audio.preload = 'auto';
-
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl); // Clean up blob URL
-        this.isPlaying = false;
-        this.currentAudio = null;
-        this.processQueue(); // Play next in queue
-      };
-
-      audio.onerror = (e) => {
-        console.warn('Audio playback error:', e);
-        URL.revokeObjectURL(audioUrl);
-        this.isPlaying = false;
-        this.currentAudio = null;
-        this.processQueue(); // Try next in queue
-      };
-
-      // Add to queue
-      this.audioQueue.push(audio);
+      return audioBlob;
 
     } catch (error) {
-      console.warn('OpenAI TTS generation failed:', error);
-      // Continue with next sentence instead of stopping everything
+      console.warn('OpenAI TTS chunk generation failed:', error);
+      return null;
     }
   }
 
   /**
-   * Process the audio queue
+   * Generate audio for complete text using OpenAI TTS API with streaming (for single chunks)
    */
-  private processQueue(): void {
+  private async generateAudio(text: string): Promise<void> {
     if (this.stopped || this.isPlaying) return;
+
+    const audioBlob = await this.generateAudioChunk(text);
+    if (audioBlob && !this.stopped) {
+      await this.playAudioBlob(audioBlob);
+    }
+  }
+
+  /**
+   * Play multiple audio blobs sequentially
+   */
+  private async playSequentialAudio(audioBlobs: Blob[]): Promise<void> {
+    if (this.stopped || audioBlobs.length === 0) return;
     
-    const nextAudio = this.audioQueue.shift();
-    if (!nextAudio) return;
+    console.log(`[${new Date().toLocaleTimeString()}] TTS playing ${audioBlobs.length} audio chunks sequentially`);
+    
+    for (let i = 0; i < audioBlobs.length; i++) {
+      if (this.stopped) break;
+      
+      console.log(`[${new Date().toLocaleTimeString()}] TTS playing chunk ${i + 1}/${audioBlobs.length}`);
+      await this.playAudioBlob(audioBlobs[i]);
+      
+      // Wait for current audio to finish before playing next
+      while (this.isPlaying && !this.stopped) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+  }
 
-    this.currentAudio = nextAudio;
-    this.isPlaying = true;
 
-    try {
-      nextAudio.play().catch(error => {
-        console.warn('Failed to play audio:', error);
-        this.isPlaying = false;
-        this.currentAudio = null;
-        // Try next in queue
-        setTimeout(() => this.processQueue(), 100);
-      });
-    } catch (error) {
-      console.warn('Audio play error:', error);
+  /**
+   * Play audio blob
+   */
+  private async playAudioBlob(audioBlob: Blob): Promise<void> {
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(audioUrl);
+
+    // Configure and play audio immediately
+    audio.volume = 0.8;
+    audio.preload = 'auto';
+
+    audio.onended = () => {
+      URL.revokeObjectURL(audioUrl);
       this.isPlaying = false;
       this.currentAudio = null;
-      setTimeout(() => this.processQueue(), 100);
-    }
+    };
+
+    audio.onerror = (e) => {
+      console.warn('Audio playback error:', e);
+      URL.revokeObjectURL(audioUrl);
+      this.isPlaying = false;
+      this.currentAudio = null;
+    };
+
+    // Play immediately instead of queuing
+    this.currentAudio = audio;
+    this.isPlaying = true;
+
+    await audio.play();
   }
 }
 

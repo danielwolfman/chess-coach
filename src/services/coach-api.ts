@@ -87,7 +87,8 @@ export class CoachApiClient {
         { role: 'user', content: userPrompt }
       ],
       stream: true,
-      max_completion_tokens: 1000
+      max_completion_tokens: 1000,
+      response_format: this.getStructuredOutputSchema()
     };
 
     console.log('Making API request with:', { 
@@ -177,6 +178,43 @@ Respond with a JSON object in this exact format:
   "better_plan": "Encouraging description of the right approach",
   "line": ["move1", "move2", "move3"]
 }`;
+  }
+
+  /**
+   * Get structured output schema for better JSON reliability
+   */
+  private getStructuredOutputSchema() {
+    return {
+      type: 'json_schema',
+      json_schema: {
+        name: 'mistake_review',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'Friendly description of what went wrong'
+            },
+            why: {
+              type: 'string',
+              description: 'Conversational explanation of why this created problems'
+            },
+            better_plan: {
+              type: 'string',
+              description: 'Encouraging description of the right approach'
+            },
+            line: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Alternative line of play in algebraic notation'
+            }
+          },
+          required: ['name', 'why', 'better_plan', 'line'],
+          additionalProperties: false
+        }
+      }
+    };
   }
 
   /**

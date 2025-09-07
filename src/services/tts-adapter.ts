@@ -138,6 +138,20 @@ class WebSpeechTTSSession implements TTSSession {
   // Sentence boundary regex
   private static SENTENCE_REGEX = /[.!?]+\s+/g;
 
+  // Clean text to remove JSON artifacts and keep only natural speech
+  private cleanTextForTts(text: string): string {
+    let s = text.replace(/\u200B/g, '').replace(/\s+/g, ' ').trim();
+    s = s
+      .replace(/^\s*\{[\s\S]*?"name"\s*:\s*"/is, '')
+      .replace(/",?\s*"why"\s*:\s*"/is, '. ')
+      .replace(/",?\s*"better_plan"\s*:\s*"/is, '. Here\'s a better plan: ')
+      .replace(/",?\s*"line"\s*:\s*\[[\s\S]*?\]/is, '')
+      .replace(/"\s*\}?\s*$/is, '');
+    s = s.replace(/^[\s"'{}\[\]]+|[\s"'{}\[\]]+$/g, '');
+    s = s.replace(/\\"/g, '"').replace(/\s{2,}/g, ' ').trim();
+    return s;
+  }
+
   constructor(
     requestId: string,
     enabled: boolean,
@@ -229,7 +243,10 @@ class WebSpeechTTSSession implements TTSSession {
   private queueSentence(sentence: string): void {
     if (!sentence.trim() || this.stopped) return;
 
-    const utterance = new SpeechSynthesisUtterance(sentence);
+    const cleaned = this.cleanTextForTts(sentence);
+    if (!cleaned) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleaned);
     
     // Configure utterance
     utterance.rate = this.rate;
@@ -284,78 +301,269 @@ class WebSpeechTTSSession implements TTSSession {
 }
 
 import { createOpenAITTSAdapter } from './openai-tts-adapter';
+import { createGoogleCloudTTSAdapter } from './google-cloud-tts-adapter';
+import { createLemonfoxTTSAdapter } from './lemonfox-tts-adapter';
+
+export type TTSProvider = 'openai' | 'google-cloud' | 'lemonfox' | 'web-speech';
+
+type ProviderMeta = {
+  id: TTSProvider;
+  name: string;
+  apiKeyStorageKey?: string;
+  apiKeyLabel?: string;
+  apiKeyPlaceholder?: string;
+};
+
+const PROVIDERS: ProviderMeta[] = [
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    apiKeyStorageKey: 'chess-coach-openai-api-key',
+    apiKeyLabel: 'OpenAI API Key',
+    apiKeyPlaceholder: 'sk-proj-...'
+  },
+  {
+    id: 'google-cloud',
+    name: 'Google Cloud',
+    apiKeyStorageKey: 'chess-coach-google-cloud-api-key',
+    apiKeyLabel: 'Google Cloud API Key',
+    apiKeyPlaceholder: 'AIza...'
+  },
+  {
+    id: 'lemonfox',
+    name: 'Lemonfox.ai',
+    apiKeyStorageKey: 'chess-coach-lemonfox-api-key',
+    apiKeyLabel: 'Lemonfox API Key',
+    apiKeyPlaceholder: 'lfx_...'
+  },
+  {
+    id: 'web-speech',
+    name: 'Browser (Web Speech)'
+  }
+];
 
 /**
- * OpenAI-only TTS adapter
+ * Multi-provider TTS adapter that supports OpenAI, Google Cloud, and Web Speech
  */
-class OpenAIOnlyTTSAdapter implements TTSAdapter {
+class MultiProviderTTSAdapter implements TTSAdapter {
   private openaiAdapter: TTSAdapter | null = null;
+  private googleCloudAdapter: TTSAdapter | null = null;
+  private lemonfoxAdapter: TTSAdapter | null = null;
+  private webSpeechAdapter: TTSAdapter | null = null;
+  private currentProvider: TTSProvider = 'openai';
 
   constructor() {
-    this.initializeOpenAI();
+    this.initializeAdapters();
+    this.loadProviderSettings();
   }
 
-  private initializeOpenAI(): void {
+  private initializeAdapters(): void {
     try {
       this.openaiAdapter = createOpenAITTSAdapter();
       if (this.openaiAdapter) {
         console.log('OpenAI TTS initialized successfully');
-      } else {
-        console.warn('OpenAI TTS adapter could not be created - missing API key?');
       }
     } catch (error) {
       console.warn('Failed to initialize OpenAI TTS:', error);
     }
+
+    try {
+      this.googleCloudAdapter = createGoogleCloudTTSAdapter();
+      if (this.googleCloudAdapter) {
+        console.log('Google Cloud TTS initialized successfully');
+      }
+    } catch (error) {
+      console.warn('Failed to initialize Google Cloud TTS:', error);
+    }
+
+    try {
+      this.lemonfoxAdapter = createLemonfoxTTSAdapter();
+      if (this.lemonfoxAdapter) {
+        console.log('Lemonfox TTS initialized successfully');
+      }
+    } catch (error) {
+      console.warn('Failed to initialize Lemonfox TTS:', error);
+    }
+
+    try {
+      this.webSpeechAdapter = new WebSpeechTTSAdapter();
+      if (this.webSpeechAdapter.isSupported()) {
+        console.log('Web Speech TTS initialized successfully');
+      }
+    } catch (error) {
+      console.warn('Failed to initialize Web Speech TTS:', error);
+    }
+  }
+
+  private getCurrentAdapter(): TTSAdapter | null {
+    switch (this.currentProvider) {
+      case 'openai':
+        return this.openaiAdapter;
+      case 'google-cloud':
+        return this.googleCloudAdapter;
+      case 'lemonfox':
+        return this.lemonfoxAdapter;
+      case 'web-speech':
+        return this.webSpeechAdapter;
+      default:
+        return this.openaiAdapter;
+    }
   }
 
   begin(requestId: string): TTSSession {
-    if (!this.openaiAdapter) {
-      // Return a no-op session if OpenAI TTS is not available
+    const adapter = this.getCurrentAdapter();
+    if (!adapter || !adapter.isSupported()) {
+      // Fall back to any available adapter
+      const fallbackAdapter = this.openaiAdapter || this.googleCloudAdapter || this.lemonfoxAdapter || this.webSpeechAdapter;
+      if (fallbackAdapter && fallbackAdapter.isSupported()) {
+        console.warn(`TTS fallback: using ${this.getAdapterName(fallbackAdapter)} instead of ${this.currentProvider}`);
+        return fallbackAdapter.begin(requestId);
+      }
+      // Return a no-op session if no TTS is available
       return new NoOpTTSSession(requestId);
     }
-    return this.openaiAdapter.begin(requestId);
+    return adapter.begin(requestId);
   }
 
   setVoice(voiceId: string): void {
-    if (this.openaiAdapter) {
-      this.openaiAdapter.setVoice(voiceId);
+    const adapter = this.getCurrentAdapter();
+    if (adapter) {
+      adapter.setVoice(voiceId);
     }
   }
 
   setRate(rate: number): void {
-    if (this.openaiAdapter) {
-      this.openaiAdapter.setRate(rate);
+    const adapter = this.getCurrentAdapter();
+    if (adapter) {
+      adapter.setRate(rate);
     }
   }
 
   setEnabled(enabled: boolean): void {
-    if (this.openaiAdapter) {
-      this.openaiAdapter.setEnabled(enabled);
+    const adapter = this.getCurrentAdapter();
+    if (adapter) {
+      adapter.setEnabled(enabled);
     }
   }
 
   getVoices(): any[] {
-    if (!this.openaiAdapter) return [];
-    return this.openaiAdapter.getVoices();
+    const adapter = this.getCurrentAdapter();
+    if (!adapter) return [];
+    return adapter.getVoices();
   }
 
   isSupported(): boolean {
+    const adapter = this.getCurrentAdapter();
+    return adapter?.isSupported() ?? false;
+  }
+
+  /**
+   * Set the current TTS provider
+   */
+  setProvider(provider: TTSProvider): boolean {
+    const adapter = this.getAdapterByProvider(provider);
+    // Always set the provider preference, even if not currently supported.
+    // The UI and begin() will handle fallback appropriately.
+    this.currentProvider = provider;
+    this.saveProviderSettings();
+    return !!(adapter && adapter.isSupported());
+  }
+
+  /**
+   * Get the current TTS provider
+   */
+  getProvider(): TTSProvider {
+    return this.currentProvider;
+  }
+
+  /**
+   * Get available providers
+   */
+  getAvailableProviders(): Array<{id: TTSProvider, name: string, available: boolean}> {
+    return PROVIDERS.map(p => ({
+      id: p.id,
+      name: p.name,
+      available: this.getAdapterByProvider(p.id)?.isSupported() ?? (p.id === 'web-speech' ? (this.webSpeechAdapter?.isSupported() ?? false) : false)
+    }));
+  }
+
+  /**
+   * Provider metadata for UI (names, storage keys, etc.)
+   */
+  getProvidersMeta(): ProviderMeta[] {
+    return [...PROVIDERS];
+  }
+
+  private getAdapterByProvider(provider: TTSProvider): TTSAdapter | null {
+    switch (provider) {
+      case 'openai':
+        return this.openaiAdapter;
+      case 'google-cloud':
+        return this.googleCloudAdapter;
+      case 'lemonfox':
+        return this.lemonfoxAdapter;
+      case 'web-speech':
+        return this.webSpeechAdapter;
+      default:
+        return null;
+    }
+  }
+
+  private getAdapterName(adapter: TTSAdapter): string {
+    if (adapter === this.openaiAdapter) return 'OpenAI';
+    if (adapter === this.googleCloudAdapter) return 'Google Cloud';
+    if (adapter === this.lemonfoxAdapter) return 'Lemonfox';
+    if (adapter === this.webSpeechAdapter) return 'Web Speech';
+    return 'Unknown';
+  }
+
+  /**
+   * Back-compat helper used by TTSSettings
+   * Returns whether the OpenAI TTS provider is available/configured
+   */
+  isOpenAIAvailable(): boolean {
     return this.openaiAdapter?.isSupported() ?? false;
   }
 
   /**
-   * Reinitialize OpenAI adapter (e.g., when API key becomes available)
+   * Reinitialize all adapters (e.g., when API keys become available)
    */
   reinitialize(): boolean {
-    this.initializeOpenAI();
+    this.initializeAdapters();
     return this.isSupported();
   }
 
   /**
-   * Check if OpenAI TTS is available
+   * Check which providers are available
    */
-  isOpenAIAvailable(): boolean {
-    return this.openaiAdapter !== null;
+  getProviderAvailability(): Record<TTSProvider, boolean> {
+    return {
+      'openai': this.openaiAdapter?.isSupported() ?? false,
+      'google-cloud': this.googleCloudAdapter?.isSupported() ?? false,
+      'lemonfox': this.lemonfoxAdapter?.isSupported() ?? false,
+      'web-speech': this.webSpeechAdapter?.isSupported() ?? false
+    };
+  }
+
+  private loadProviderSettings(): void {
+    try {
+      const saved = localStorage.getItem('chess-coach-tts-provider');
+      if (saved) {
+        const provider = saved as TTSProvider;
+        // Always honor saved preference; support check happens later.
+        this.currentProvider = provider;
+      }
+    } catch (e) {
+      console.warn('Failed to load TTS provider settings:', e);
+    }
+  }
+
+  private saveProviderSettings(): void {
+    try {
+      localStorage.setItem('chess-coach-tts-provider', this.currentProvider);
+    } catch (e) {
+      console.warn('Failed to save TTS provider settings:', e);
+    }
   }
 }
 
@@ -364,7 +572,7 @@ class OpenAIOnlyTTSAdapter implements TTSAdapter {
  */
 class NoOpTTSSession implements TTSSession {
   constructor(requestId: string) {
-    console.warn(`TTS session ${requestId} - OpenAI TTS not available, audio disabled`);
+    console.warn(`TTS session ${requestId} - No TTS provider available; audio disabled.`);
   }
 
   feed(_textChunk: string): void {
@@ -383,4 +591,4 @@ class NoOpTTSSession implements TTSSession {
 /**
  * Global TTS adapter instance
  */
-export const ttsAdapter = new OpenAIOnlyTTSAdapter();
+export const ttsAdapter = new MultiProviderTTSAdapter();
