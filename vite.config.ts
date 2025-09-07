@@ -8,6 +8,10 @@ process.env.TAILWIND_DISABLE_NATIVE = process.env.TAILWIND_DISABLE_NATIVE || '1'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // Set the base path for assets. For a custom domain or root hosting, use '/'.
+  // For GitHub Pages project sites (https://<user>.github.io/<repo>/), set '/<repo>/'
+  // You can override this per-build via env var BASE_PATH.
+  base: process.env.BASE_PATH || '/',
   plugins: [react(), tsconfigPaths()],
   server: {
     port: 5173,

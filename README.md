@@ -44,3 +44,15 @@ Then open `http://localhost:5173`.
 
 - Public env vars must be prefixed with `VITE_` to be exposed to the client.
 - Linting and formatting are configured with ESLint + Prettier.
+
+## Deploy (GitHub Pages)
+
+- Vite base path:
+  - Custom domain or root hosting: leave `base` as `/` (default).
+  - Project page (https://<USER>.github.io/chess-coach/): use `/chess-coach/`.
+  - This repo reads `BASE_PATH` at build time. The provided workflow sets `BASE_PATH=/chess-coach/`.
+
+- Workflow:
+  - See `.github/workflows/deploy.yml`.
+  - Push to `main` to build and deploy to Pages.
+  - For a custom domain, remove the `BASE_PATH` env in the build step or set it to `/`.
