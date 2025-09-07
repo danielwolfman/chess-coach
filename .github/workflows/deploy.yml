@@ -31,11 +31,8 @@ jobs:
         run: npm ci
 
       - name: Build
-        # If deploying to https://<USER>.github.io/chess-coach/, keep BASE_PATH as below.
-        # If deploying to a custom domain or root, remove BASE_PATH or set it to '/'.
+        # Custom domain/root deploy: use base '/'
         run: npm run build
-        env:
-          BASE_PATH: /chess-coach/
 
       # (SPA fix) copy index.html => 404.html so route refreshes work
       - name: Add 404 fallback
